@@ -1,0 +1,25 @@
+# Docker Compose override for testing with RTSP simulation
+# Usage: docker compose -f docker-compose.yml -f docker-compose.test.yml up
+
+services:
+  rtsp-server:
+    image: bluenviron/mediamtx:latest
+    ports:
+      - "8554:8554"
+      - "1935:1935"
+      - "8888:8888"
+    networks:
+      - app-net
+
+  rtsp-publisher:
+    image: jrottenberg/ffmpeg:4.4-alpine
+    depends_on:
+      - rtsp-server
+    networks:
+      - app-net
+    restart: unless-stopped
+    command: >
+      -re -f lavfi -i testsrc=size=1280x720:rate=30
+      -f lavfi -i sine=frequency=1000:sample_rate=44100
+      -c:v libx264 -preset ultrafast -tune zerolatency
+      -c:a aac -f rtsp rtsp://rtsp-server:8554/test

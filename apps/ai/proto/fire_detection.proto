@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package fire_detection;
+
+service FireDetectionService {
+  rpc DetectFire(DetectRequest) returns (DetectResponse);
+  rpc GetStatus(StatusRequest) returns (StatusResponse);
+  rpc HealthCheck(HealthRequest) returns (HealthResponse);
+}
+
+message DetectRequest {
+  oneof image_data {
+    bytes image_bytes = 1;
+    string base64_image = 2;
+  }
+  string stream_id = 3;
+  bool enable_detection = 4;
+  float confidence_threshold = 5;
+}
+
+message BoundingBox {
+  int32 x = 1;
+  int32 y = 2;
+  int32 width = 3;
+  int32 height = 4;
+}
+
+message Detection {
+  string label = 1;
+  float confidence = 2;
+  BoundingBox bounding_box = 3;
+}
+
+message DetectResponse {
+  repeated Detection detections = 1;
+  float inference_time = 2;
+  ModelInfo model_info = 3;
+  string stream_id = 4;
+  bool enabled = 5;
+}
+
+message ModelInfo {
+  string name = 1;
+  string path = 2;
+  string device = 3;
+  bool warmed_up = 4;
+}
+
+message StatusRequest {}
+
+message StatusResponse {
+  string status = 1;
+  bool model_loaded = 2;
+  string device = 3;
+  GPUInfo gpu = 4;
+  float fps = 5;
+  float avg_inference_time = 6;
+  MemoryUsage memory_usage = 7;
+  float uptime = 8;
+  DetectionStats stats = 9;
+}
+
+message GPUInfo {
+  string device = 1;
+  int64 memory_used = 2;
+  int64 memory_total = 3;
+  repeated int32 compute_capability = 4;
+}
+
+message MemoryUsage {
+  int64 total = 1;
+  int64 available = 2;
+  float percent = 3;
+  int64 process_rss = 4;
+  int64 process_vms = 5;
+}
+
+message DetectionStats {
+  int32 total_requests = 1;
+  int32 detection_enabled_requests = 2;
+  int32 total_detections = 3;
+  float avg_inference_time = 4;
+  float fps = 5;
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;
+  bool model_loaded = 2;
+  string version = 3;
+  double timestamp = 4;
+}

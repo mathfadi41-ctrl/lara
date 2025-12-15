@@ -1,0 +1,23 @@
+import { Module } from "@nestjs/common";
+import { AppController } from "./app.controller";
+import { ConfigModule } from "./config/config.module";
+import { DatabaseModule } from "./database/database.module";
+import { QueueModule } from "./queue/queue.module";
+import { StreamModule } from "./stream/stream.module";
+import { DetectionModule } from "./detection/detection.module";
+import { WebSocketModule } from "./websocket/websocket.module";
+import { IngestionModule } from "./ingestion/ingestion.module";
+
+@Module({
+  imports: [
+    ConfigModule,
+    DatabaseModule,
+    QueueModule,
+    StreamModule,
+    DetectionModule,
+    WebSocketModule,
+    IngestionModule,
+  ],
+  controllers: [AppController],
+})
+export class AppModule {}

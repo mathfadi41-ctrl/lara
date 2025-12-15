@@ -1,0 +1,95 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: infra/docker/backend.Dockerfile
+    environment:
+      PORT: 4000
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/app}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      AI_SERVICE_URL: ${AI_SERVICE_URL:-http://ai-model:8000}
+      FRAME_STORAGE_PATH: /app/storage/frames
+      MAX_FPS: ${MAX_FPS:-20}
+      FFMPEG_PATH: /usr/bin/ffmpeg
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ai-model:
+        condition: service_started
+    ports:
+      - "${BACKEND_PORT:-4000}:4000"
+    volumes:
+      - frame-storage:/app/storage/frames
+    networks:
+      - app-net
+
+  ai-model:
+    build:
+      context: .
+      dockerfile: infra/docker/ai.Dockerfile
+    environment:
+      PORT: 8000
+    ports:
+      - "${AI_PORT:-8000}:8000"
+    networks:
+      - app-net
+
+  frontend:
+    build:
+      context: .
+      dockerfile: infra/docker/frontend.Dockerfile
+    environment:
+      PORT: 3000
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+      NEXT_PUBLIC_AI_URL: ${NEXT_PUBLIC_AI_URL:-http://localhost:8000}
+    depends_on:
+      backend:
+        condition: service_started
+      ai-model:
+        condition: service_started
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    networks:
+      - app-net
+
+networks:
+  app-net:
+
+volumes:
+  pgdata:
+  redisdata:
+  frame-storage:

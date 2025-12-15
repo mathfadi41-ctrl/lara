@@ -1,0 +1,29 @@
+{
+  "name": "monorepo",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "env:init": "node scripts/env-init.mjs",
+    "dev": "npm run dev:frontend",
+    "dev:frontend": "dotenv -e .env -e apps/frontend/.env -- npm -w frontend run dev",
+    "dev:backend": "dotenv -e .env -e apps/backend/.env -- npm -w backend run dev",
+    "dev:ai": "dotenv -e .env -e apps/ai/.env -- sh -c 'cd apps/ai && python -m uvicorn main:app --reload --host 0.0.0.0 --port ${PORT:-8000}'",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm -w frontend run lint",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down --remove-orphans"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "dotenv-cli": "^7.4.4",
+    "eslint": "^9",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^5.2.2"
+  }
+}

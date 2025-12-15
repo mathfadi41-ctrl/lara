@@ -1,0 +1,49 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Stream {
+  id               String      @id @default(cuid())
+  name             String
+  rtspUrl          String
+  status           StreamStatus @default(STOPPED)
+  detectionEnabled Boolean      @default(true)
+  fps              Int          @default(5)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  lastHeartbeat    DateTime?
+  detections       Detection[]
+
+  @@index([status])
+  @@map("streams")
+}
+
+model Detection {
+  id            String   @id @default(cuid())
+  streamId      String
+  stream        Stream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  timestamp     DateTime @default(now())
+  confidence    Float
+  label         String
+  boundingBox   Json
+  imagePath     String
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  @@index([streamId, timestamp])
+  @@index([timestamp])
+  @@map("detections")
+}
+
+enum StreamStatus {
+  STOPPED
+  STARTING
+  RUNNING
+  ERROR
+  STOPPING
+}
