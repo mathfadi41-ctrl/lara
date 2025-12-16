@@ -1,4 +1,5 @@
-import { IsString, IsUrl, IsBoolean, IsInt, Min, Max, IsOptional } from "class-validator";
+import { IsString, IsUrl, IsBoolean, IsInt, Min, Max, IsOptional, IsEnum } from "class-validator";
+import { StreamType, SplitLayout } from "@prisma/client";
 
 export class CreateStreamDto {
   @IsString()
@@ -16,4 +17,12 @@ export class CreateStreamDto {
   @Max(30)
   @IsOptional()
   fps?: number;
+
+  @IsEnum(StreamType)
+  @IsOptional()
+  type?: StreamType;
+
+  @IsEnum(SplitLayout)
+  @IsOptional()
+  splitLayout?: SplitLayout;
 }

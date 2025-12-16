@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { StreamType, SplitLayout } from '@prisma/client';
 
 export class StreamDto {
   @ApiProperty()
@@ -15,6 +16,12 @@ export class StreamDto {
 
   @ApiProperty()
   detectionEnabled!: boolean;
+
+  @ApiProperty({ enum: StreamType })
+  type!: StreamType;
+
+  @ApiPropertyOptional({ enum: SplitLayout })
+  splitLayout!: SplitLayout | null;
 
   @ApiProperty()
   isRunning!: boolean;

@@ -24,12 +24,16 @@ export class StreamsService {
     rtspUrl?: string;
     webrtcUrl?: string;
     detectionEnabled?: boolean;
+    type?: string;
+    splitLayout?: string;
   }): Promise<Stream> {
     const createData: Prisma.StreamCreateInput = {
       name: data.name,
       rtspUrl: data.rtspUrl,
       webrtcUrl: data.webrtcUrl,
       detectionEnabled: data.detectionEnabled ?? false,
+      type: data.type as any,
+      splitLayout: data.splitLayout as any,
     };
 
     return this.prisma.stream.create({ data: createData });
@@ -42,12 +46,21 @@ export class StreamsService {
       rtspUrl?: string;
       webrtcUrl?: string;
       detectionEnabled?: boolean;
+      type?: string;
+      splitLayout?: string;
     },
   ): Promise<Stream> {
     try {
       return await this.prisma.stream.update({
         where: { id },
-        data,
+        data: {
+          name: data.name,
+          rtspUrl: data.rtspUrl,
+          webrtcUrl: data.webrtcUrl,
+          detectionEnabled: data.detectionEnabled,
+          type: data.type as any,
+          splitLayout: data.splitLayout as any,
+        },
       });
     } catch {
       throw new NotFoundException('Stream not found');

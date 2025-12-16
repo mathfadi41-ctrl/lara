@@ -104,11 +104,15 @@ model Stream {
   name             String
   rtspUrl          String
   status           StreamStatus @default(STOPPED)
+  type             StreamType   @default(COLOR)
+  splitLayout      SplitLayout?
   detectionEnabled Boolean      @default(true)
   fps              Int          @default(5)
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
   lastHeartbeat    DateTime?
+  lastFrameAt      DateTime?
+  avgLatencyMs     Float        @default(0)
   detections       Detection[]
 }
 
@@ -119,23 +123,46 @@ enum StreamStatus {
   ERROR
   STOPPING
 }
+
+enum StreamType {
+  COLOR    // Standard RGB camera
+  THERMAL  // Thermal/infrared camera
+  SPLIT    // Split-screen view (dual-channel)
+}
+
+enum SplitLayout {
+  LEFT_RIGHT  // Side-by-side split
+  TOP_BOTTOM  // Vertical split
+}
 ```
 
 ### Detection Model
 ```prisma
 model Detection {
-  id            String   @id @default(cuid())
+  id            String        @id @default(cuid())
   streamId      String
-  stream        Stream   @relation(fields: [streamId], references: [id])
-  timestamp     DateTime @default(now())
+  stream        Stream        @relation(fields: [streamId], references: [id])
+  timestamp     DateTime      @default(now())
   confidence    Float
-  label         String
-  boundingBox   Json     // { x, y, width, height }
+  label         String        // Raw label from AI service
+  detectionType DetectionType @default(SMOKE)
+  boundingBox   Json          // { x, y, width, height }
   imagePath     String
-  metadata      Json?
-  createdAt     DateTime @default(now())
+  metadata      Json?         // Includes channel info for split streams
+  createdAt     DateTime      @default(now())
+}
+
+enum DetectionType {
+  SMOKE    // Smoke detection
+  FIRE     // Fire/flame detection
+  HOTSPOT  // Thermal hotspot detection
 }
 ```
+
+**Note on Detection Types:**
+- `label`: Raw string label from AI service (e.g., "smoke", "fire-large", "thermal-hotspot")
+- `detectionType`: Normalized enum value for consistent filtering and querying
+- `metadata.channel`: For SPLIT streams, indicates which channel ("left"/"right" or "top"/"bottom") the detection came from
 
 ## REST API
 
@@ -150,6 +177,29 @@ Content-Type: application/json
   "name": "Front Door Camera",
   "rtspUrl": "rtsp://camera.local/stream",
   "fps": 5,
+  "detectionEnabled": true,
+  "type": "COLOR",           // Optional: COLOR, THERMAL, or SPLIT (default: COLOR)
+  "splitLayout": "LEFT_RIGHT" // Optional: LEFT_RIGHT or TOP_BOTTOM (only for SPLIT type)
+}
+```
+
+**Example - Thermal Camera:**
+```json
+{
+  "name": "Thermal Perimeter Camera",
+  "rtspUrl": "rtsp://thermal.local/stream",
+  "type": "THERMAL",
+  "detectionEnabled": true
+}
+```
+
+**Example - Split-Screen Camera:**
+```json
+{
+  "name": "Dual-View Entrance",
+  "rtspUrl": "rtsp://split.local/stream",
+  "type": "SPLIT",
+  "splitLayout": "TOP_BOTTOM",
   "detectionEnabled": true
 }
 ```
@@ -211,6 +261,40 @@ GET /detections/stream/:streamId?limit=50
 ```http
 GET /detections/screenshot/:streamId/:filename
 ```
+
+## WebSocket Events
+
+### Detection Event
+
+When a detection occurs, subscribers receive the following event:
+
+```javascript
+{
+  streamId: "abc123",
+  detectionId: "det456",
+  label: "smoke",              // Raw label from AI service
+  detectionType: "SMOKE",      // Normalized type: SMOKE, FIRE, or HOTSPOT
+  confidence: 0.95,
+  boundingBox: { x: 100, y: 200, width: 50, height: 75 },
+  frameTimestamp: "2024-01-15T10:30:00Z",
+  latencyMs: 250,
+  channel: "left",             // Optional: For SPLIT streams ("left"/"right" or "top"/"bottom")
+  streamType: "COLOR"          // Stream type: COLOR, THERMAL, or SPLIT
+}
+```
+
+**Detection Type Mapping:**
+- AI service can return `detectionType` directly
+- If not provided, backend maps `label` to type:
+  - Labels containing "fire" → `FIRE`
+  - Labels containing "hotspot" → `HOTSPOT`
+  - Labels containing "smoke" → `SMOKE`
+  - Default → `SMOKE`
+
+**Split Stream Channels:**
+- For `SPLIT` streams with `LEFT_RIGHT` layout: `channel` is "left" or "right"
+- For `SPLIT` streams with `TOP_BOTTOM` layout: `channel` is "top" or "bottom"
+- AI service determines which channel the detection originated from
 
 ## Environment Variables
 

@@ -23,6 +23,8 @@ export class StreamService {
         detectionEnabled: createStreamDto.detectionEnabled ?? true,
         fps: createStreamDto.fps ?? 5,
         status: "STOPPED",
+        type: createStreamDto.type,
+        splitLayout: createStreamDto.splitLayout,
       },
     });
 

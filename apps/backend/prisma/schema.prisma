@@ -8,10 +8,12 @@ datasource db {
 }
 
 model Stream {
-  id               String      @id @default(cuid())
+  id               String       @id @default(cuid())
   name             String
   rtspUrl          String
   status           StreamStatus @default(STOPPED)
+  type             StreamType   @default(COLOR)
+  splitLayout      SplitLayout?
   detectionEnabled Boolean      @default(true)
   fps              Int          @default(5)
   createdAt        DateTime     @default(now())
@@ -26,16 +28,17 @@ model Stream {
 }
 
 model Detection {
-  id            String   @id @default(cuid())
+  id            String        @id @default(cuid())
   streamId      String
-  stream        Stream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
-  timestamp     DateTime @default(now())
+  stream        Stream        @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  timestamp     DateTime      @default(now())
   confidence    Float
   label         String
+  detectionType DetectionType @default(SMOKE)
   boundingBox   Json
   imagePath     String
   metadata      Json?
-  createdAt     DateTime @default(now())
+  createdAt     DateTime      @default(now())
 
   @@index([streamId, timestamp])
   @@index([timestamp])
@@ -48,4 +51,21 @@ enum StreamStatus {
   RUNNING
   ERROR
   STOPPING
+}
+
+enum StreamType {
+  COLOR
+  THERMAL
+  SPLIT
+}
+
+enum SplitLayout {
+  LEFT_RIGHT
+  TOP_BOTTOM
+}
+
+enum DetectionType {
+  SMOKE
+  FIRE
+  HOTSPOT
 }

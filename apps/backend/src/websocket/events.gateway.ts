@@ -21,10 +21,13 @@ export interface DetectionEvent {
   streamId: string;
   detectionId: string;
   label: string;
+  detectionType?: string;
   confidence: number;
   boundingBox: Record<string, unknown>;
   frameTimestamp: Date;
   latencyMs: number;
+  channel?: string;
+  streamType?: string;
 }
 
 @WebSocketGateway({
