@@ -89,6 +89,28 @@ export class AuthService {
     return this.issueTokens(user);
   }
 
+  async logout(refreshToken: string): Promise<void> {
+    const refreshSecret = this.config.get('JWT_REFRESH_SECRET', { infer: true });
+
+    try {
+      const payload = await this.jwtService.verifyAsync<JwtRefreshPayload>(
+        refreshToken,
+        {
+          secret: refreshSecret,
+        },
+      );
+
+      if (payload.jti) {
+        await this.prisma.refreshToken.updateMany({
+          where: { id: payload.jti },
+          data: { revokedAt: new Date() },
+        });
+      }
+    } catch {
+      // Ignore invalid tokens during logout
+    }
+  }
+
   private async issueTokens(user: User): Promise<AuthResponseDto> {
     const tokens = await this.createTokens(user);
 

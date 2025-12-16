@@ -16,10 +16,11 @@ const queryClient = new QueryClient({
 });
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const { setUser } = useAuthStore();
+  const { setUser, setLoading } = useAuthStore();
 
   useEffect(() => {
     const loadUser = async () => {
+      setLoading(true);
       try {
         const token = localStorage.getItem('accessToken');
         if (token) {
@@ -29,11 +30,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
         }
       } catch (error) {
         console.error('Failed to load user:', error);
+        // If loading user fails, we should probably clear auth?
+        // But maybe it failed due to network?
+        // If 401, the interceptor should have handled it?
+        // If fetchUser fails, we assume not logged in or invalid token.
+        // But interceptor might refresh.
+        // If refresh fails, interceptor clears tokens.
+      } finally {
+        setLoading(false);
       }
     };
 
     loadUser();
-  }, [setUser]);
+  }, [setUser, setLoading]);
 
   return (
     <QueryClientProvider client={queryClient}>

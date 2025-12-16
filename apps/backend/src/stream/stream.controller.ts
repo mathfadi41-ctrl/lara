@@ -7,11 +7,15 @@ import {
   Param,
   Delete,
   ValidationPipe,
+  UseGuards,
 } from "@nestjs/common";
 import { StreamService } from "./stream.service";
 import { CreateStreamDto } from "./dto/create-stream.dto";
 import { UpdateStreamDto } from "./dto/update-stream.dto";
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { RolesGuard } from "../auth/guards/roles.guard";
 
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller("streams")
 export class StreamController {
   constructor(private readonly streamService: StreamService) {}

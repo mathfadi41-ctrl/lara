@@ -7,6 +7,8 @@ import { StreamModule } from "./stream/stream.module";
 import { DetectionModule } from "./detection/detection.module";
 import { WebSocketModule } from "./websocket/websocket.module";
 import { IngestionModule } from "./ingestion/ingestion.module";
+import { AuthModule } from "./auth/auth.module";
+import { UsersModule } from "./users/users.module";
 
 @Module({
   imports: [
@@ -17,6 +19,8 @@ import { IngestionModule } from "./ingestion/ingestion.module";
     DetectionModule,
     WebSocketModule,
     IngestionModule,
+    AuthModule,
+    UsersModule,
   ],
   controllers: [AppController],
 })
