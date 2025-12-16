@@ -10,14 +10,21 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
+# Install PyTorch with extended timeout and retry mechanism
+# Using --default-timeout=300 (5 minutes) and --retries=3 for large torch wheels
 RUN pip install --no-cache-dir \
+        --default-timeout=300 \
+        --retries=3 \
         --index-url https://download.pytorch.org/whl/cpu \
         --extra-index-url https://pypi.org/simple \
         torch torchvision
 
-# Install Python dependencies
+# Install Python dependencies with extended timeout and retry mechanism
 COPY apps/ai/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir \
+        --default-timeout=300 \
+        --retries=3 \
+        -r requirements.txt
 
 # Runtime stage
 FROM python:3.11-slim
