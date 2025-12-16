@@ -5,8 +5,9 @@ import logging
 import base64
 import asyncio
 import psutil
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Literal
 from contextlib import asynccontextmanager
+from enum import Enum
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks, Depends
 from fastapi.responses import JSONResponse
@@ -21,9 +22,26 @@ from ultralytics import YOLO
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Enums for stream types and detection types
+class StreamType(str, Enum):
+    COLOR = "COLOR"
+    THERMAL = "THERMAL"
+    SPLIT = "SPLIT"
+
+class SplitLayout(str, Enum):
+    LEFT_RIGHT = "LEFT_RIGHT"
+    TOP_BOTTOM = "TOP_BOTTOM"
+
+class DetectionType(str, Enum):
+    SMOKE = "SMOKE"
+    FIRE = "FIRE"
+    HOTSPOT = "HOTSPOT"
+
 # Global variables
-model = None
-model_path = None
+color_model = None
+thermal_model = None
+color_model_path = None
+thermal_model_path = None
 device = None
 is_warmed_up = False
 inference_times = []
@@ -46,11 +64,16 @@ class Detection(BaseModel):
     label: str = Field(..., description="Class label of detected object")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score (0-1)")
     boundingBox: BoundingBox = Field(..., description="Bounding box coordinates")
+    detectionType: DetectionType = Field(..., description="Type of detection (SMOKE, FIRE, HOTSPOT)")
+    channel: Optional[str] = Field(None, description="Channel identifier for split streams (color/thermal)")
 
 class DetectionRequest(BaseModel):
     streamId: Optional[str] = Field(None, description="Stream identifier")
     enableDetection: bool = Field(True, description="Enable/disable detection for this request")
     confidenceThreshold: Optional[float] = Field(None, ge=0.0, le=1.0, description="Confidence threshold override")
+    streamType: Optional[StreamType] = Field(None, description="Stream type (COLOR, THERMAL, SPLIT)")
+    splitLayout: Optional[SplitLayout] = Field(None, description="Split layout for SPLIT streams")
+    channel: Optional[str] = Field(None, description="Channel hint for split streams")
 
 class DetectionResponse(BaseModel):
     detections: List[Detection] = Field(default_factory=list, description="List of detections")
@@ -99,39 +122,126 @@ def get_device_info():
         device = torch.device("cpu")
         return "cpu"
 
-def load_model():
-    """Load YOLO model for fire/smoke/hotspot detection."""
-    global model, model_path, is_warmed_up
+class ThermalDetector:
+    """Thermal hotspot detector using intensity-based thresholding."""
     
-    model_path = os.getenv("MODEL_PATH", "./models/yolov8n.pt")
+    def __init__(self, threshold: float = 200.0):
+        self.threshold = threshold
+        logger.info(f"Initialized ThermalDetector with threshold={threshold}")
+    
+    def detect(self, image: np.ndarray, confidence_threshold: float = 0.25) -> List[Detection]:
+        """Detect hotspots in thermal image using intensity thresholding."""
+        detections = []
+        
+        # Convert to grayscale if needed
+        if len(image.shape) == 3:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = image
+        
+        # Apply threshold to find hotspots
+        _, binary = cv2.threshold(gray, self.threshold, 255, cv2.THRESH_BINARY)
+        
+        # Find contours
+        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        for contour in contours:
+            # Filter small contours
+            area = cv2.contourArea(contour)
+            if area < 100:  # Minimum area threshold
+                continue
+            
+            # Get bounding box
+            x, y, w, h = cv2.boundingRect(contour)
+            
+            # Calculate confidence based on mean intensity in the region
+            roi = gray[y:y+h, x:x+w]
+            mean_intensity = np.mean(roi)
+            confidence = min(mean_intensity / 255.0, 1.0)
+            
+            if confidence >= confidence_threshold:
+                detections.append(Detection(
+                    label="hotspot",
+                    confidence=float(confidence),
+                    boundingBox=BoundingBox(x=int(x), y=int(y), width=int(w), height=int(h)),
+                    detectionType=DetectionType.HOTSPOT,
+                    channel=None
+                ))
+        
+        return detections
+
+def load_color_model():
+    """Load YOLO model for RGB fire/smoke detection."""
+    global color_model, color_model_path
+    
+    color_model_path = os.getenv("COLOR_MODEL_PATH", os.getenv("MODEL_PATH", "./models/yolov8n.pt"))
     models_dir = os.getenv("MODELS_DIR", "./models")
     
     # Create models directory if it doesn't exist
     os.makedirs(models_dir, exist_ok=True)
     
     # Download model if it doesn't exist
-    if not os.path.exists(model_path):
-        logger.info(f"Model not found at {model_path}, downloading...")
-        # For fire/smoke detection, we can use a general YOLOv8 model
-        # In production, you might want to use a custom trained model
-        model_path = "yolov8n.pt"  # ultralytics will handle downloading
+    if not os.path.exists(color_model_path):
+        logger.info(f"Color model not found at {color_model_path}, downloading...")
+        color_model_path = "yolov8n.pt"  # ultralytics will handle downloading
     
     try:
-        logger.info(f"Loading model from {model_path}...")
-        model = YOLO(model_path)
-        model.to(device)
+        logger.info(f"Loading color model from {color_model_path}...")
+        color_model = YOLO(color_model_path)
+        color_model.to(device)
         
         # Warm up the model
-        logger.info("Warming up model...")
+        logger.info("Warming up color model...")
         dummy_image = np.zeros((640, 640, 3), dtype=np.uint8)
-        results = model(dummy_image, verbose=False)
-        is_warmed_up = True
+        results = color_model(dummy_image, verbose=False)
         
-        logger.info(f"Model loaded successfully on {get_device_info()}")
+        logger.info(f"Color model loaded successfully on {get_device_info()}")
         return True
     except Exception as e:
-        logger.error(f"Failed to load model: {e}")
+        logger.error(f"Failed to load color model: {e}")
         return False
+
+def load_thermal_model():
+    """Load thermal model or initialize heuristic detector."""
+    global thermal_model, thermal_model_path
+    
+    thermal_model_path = os.getenv("THERMAL_MODEL_PATH", None)
+    thermal_threshold = float(os.getenv("THERMAL_THRESHOLD", "200.0"))
+    
+    if thermal_model_path and os.path.exists(thermal_model_path):
+        try:
+            logger.info(f"Loading thermal model from {thermal_model_path}...")
+            thermal_model = YOLO(thermal_model_path)
+            thermal_model.to(device)
+            
+            # Warm up the model
+            dummy_image = np.zeros((640, 640, 3), dtype=np.uint8)
+            results = thermal_model(dummy_image, verbose=False)
+            
+            logger.info(f"Thermal model loaded successfully on {get_device_info()}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to load thermal model: {e}")
+            logger.info("Falling back to heuristic thermal detector")
+    
+    # Use heuristic-based detector
+    thermal_model = ThermalDetector(threshold=thermal_threshold)
+    logger.info("Using heuristic-based thermal detector")
+    return True
+
+def load_model():
+    """Load detection models (for backward compatibility)."""
+    global is_warmed_up
+    
+    # Load color model by default
+    success = load_color_model()
+    if success:
+        is_warmed_up = True
+    
+    # Attempt to load thermal model (doesn't affect startup if it fails)
+    load_thermal_model()
+    
+    return success
 
 def process_image(image_data: bytes) -> np.ndarray:
     """Convert image bytes to numpy array for inference."""
@@ -166,7 +276,19 @@ def process_base64_image(base64_data: str) -> np.ndarray:
         logger.error(f"Error processing base64 image: {e}")
         raise HTTPException(status_code=400, detail=f"Invalid base64 image data: {e}")
 
-def format_detections(results, confidence_threshold: float = 0.25) -> List[Detection]:
+def map_label_to_detection_type(label: str) -> DetectionType:
+    """Map YOLO class label to DetectionType."""
+    label_lower = label.lower()
+    if 'fire' in label_lower:
+        return DetectionType.FIRE
+    elif 'smoke' in label_lower:
+        return DetectionType.SMOKE
+    elif 'hotspot' in label_lower or 'hot' in label_lower:
+        return DetectionType.HOTSPOT
+    # Default mapping for common COCO classes that might indicate fire/smoke
+    return DetectionType.SMOKE
+
+def format_detections(results, confidence_threshold: float = 0.25, channel: Optional[str] = None) -> List[Detection]:
     """Format YOLO results into detection objects."""
     detections = []
     
@@ -191,6 +313,9 @@ def format_detections(results, confidence_threshold: float = 0.25) -> List[Detec
                 class_id = int(boxes.cls[i])
                 label = names[class_id]
                 
+                # Map label to detection type
+                detection_type = map_label_to_detection_type(label)
+                
                 detections.append(Detection(
                     label=label,
                     confidence=confidence,
@@ -199,10 +324,130 @@ def format_detections(results, confidence_threshold: float = 0.25) -> List[Detec
                         y=y1,
                         width=x2 - x1,
                         height=y2 - y1,
-                    )
+                    ),
+                    detectionType=detection_type,
+                    channel=channel
                 ))
     
     return detections
+
+def split_frame(image: np.ndarray, layout: SplitLayout) -> tuple[np.ndarray, np.ndarray]:
+    """Split frame according to layout."""
+    height, width = image.shape[:2]
+    
+    if layout == SplitLayout.LEFT_RIGHT:
+        mid = width // 2
+        left_half = image[:, :mid]
+        right_half = image[:, mid:]
+        return left_half, right_half
+    else:  # TOP_BOTTOM
+        mid = height // 2
+        top_half = image[:mid, :]
+        bottom_half = image[mid:, :]
+        return top_half, bottom_half
+
+def remap_bounding_boxes(detections: List[Detection], layout: SplitLayout, is_second_half: bool, original_shape: tuple) -> List[Detection]:
+    """Remap bounding boxes from split frame to full frame coordinates."""
+    height, width = original_shape[:2]
+    remapped = []
+    
+    for detection in detections:
+        bbox = detection.boundingBox
+        new_bbox = BoundingBox(x=bbox.x, y=bbox.y, width=bbox.width, height=bbox.height)
+        
+        if layout == SplitLayout.LEFT_RIGHT:
+            if is_second_half:
+                # Right half - add offset to x coordinate
+                new_bbox.x = bbox.x + (width // 2)
+        else:  # TOP_BOTTOM
+            if is_second_half:
+                # Bottom half - add offset to y coordinate
+                new_bbox.y = bbox.y + (height // 2)
+        
+        remapped.append(Detection(
+            label=detection.label,
+            confidence=detection.confidence,
+            boundingBox=new_bbox,
+            detectionType=detection.detectionType,
+            channel=detection.channel
+        ))
+    
+    return remapped
+
+def detect_color(image: np.ndarray, confidence_threshold: float, channel: Optional[str] = None) -> List[Detection]:
+    """Run color detection pipeline for smoke/fire."""
+    if color_model is None:
+        logger.error("Color model not loaded")
+        return []
+    
+    if isinstance(color_model, YOLO):
+        results = color_model(image, conf=confidence_threshold, verbose=False)
+        return format_detections(results, confidence_threshold, channel)
+    else:
+        return []
+
+def detect_thermal(image: np.ndarray, confidence_threshold: float, channel: Optional[str] = None) -> List[Detection]:
+    """Run thermal detection pipeline for hotspots."""
+    if thermal_model is None:
+        logger.error("Thermal model not loaded")
+        return []
+    
+    if isinstance(thermal_model, ThermalDetector):
+        # Use heuristic detector
+        detections = thermal_model.detect(image, confidence_threshold)
+        # Update channel for all detections
+        for det in detections:
+            det.channel = channel
+        return detections
+    elif isinstance(thermal_model, YOLO):
+        # Use YOLO thermal model
+        results = thermal_model(image, conf=confidence_threshold, verbose=False)
+        detections = format_detections(results, confidence_threshold, channel)
+        # Ensure all detections are marked as HOTSPOT
+        for det in detections:
+            det.detectionType = DetectionType.HOTSPOT
+        return detections
+    else:
+        return []
+
+def detect_split(image: np.ndarray, layout: SplitLayout, confidence_threshold: float) -> List[Detection]:
+    """Run detection on split frame (both color and thermal halves)."""
+    original_shape = image.shape
+    
+    # Split the frame
+    first_half, second_half = split_frame(image, layout)
+    
+    # Run color detection on first half (assumed to be color/RGB)
+    color_detections = detect_color(first_half, confidence_threshold, channel="color")
+    
+    # Run thermal detection on second half (assumed to be thermal)
+    thermal_detections = detect_thermal(second_half, confidence_threshold, channel="thermal")
+    
+    # Remap bounding boxes to full frame coordinates
+    color_detections_remapped = remap_bounding_boxes(color_detections, layout, False, original_shape)
+    thermal_detections_remapped = remap_bounding_boxes(thermal_detections, layout, True, original_shape)
+    
+    # Combine all detections
+    all_detections = color_detections_remapped + thermal_detections_remapped
+    
+    return all_detections
+
+def route_detection(image: np.ndarray, stream_type: StreamType, split_layout: Optional[SplitLayout], 
+                   confidence_threshold: float) -> List[Detection]:
+    """Route detection request to appropriate pipeline based on stream type."""
+    if stream_type == StreamType.COLOR:
+        return detect_color(image, confidence_threshold)
+    elif stream_type == StreamType.THERMAL:
+        return detect_thermal(image, confidence_threshold)
+    elif stream_type == StreamType.SPLIT:
+        if split_layout is None:
+            logger.warning("Split layout not provided for SPLIT stream, defaulting to LEFT_RIGHT")
+            split_layout = SplitLayout.LEFT_RIGHT
+        return detect_split(image, split_layout, confidence_threshold)
+    else:
+        # Default to color detection
+        logger.warning(f"Unknown stream type: {stream_type}, defaulting to color detection")
+        return detect_color(image, confidence_threshold)
 
 def get_gpu_info():
     """Get GPU information if available."""
@@ -274,17 +519,32 @@ async def health():
 async def detect(
     file: Optional[UploadFile] = File(None),
     base64_image: Optional[str] = None,
-    request_data: Optional[DetectionRequest] = None
+    request_data: Optional[DetectionRequest] = None,
+    streamId: Optional[str] = None,
+    enableDetection: Optional[bool] = None,
+    confidenceThreshold: Optional[float] = None,
+    streamType: Optional[str] = None,
+    splitLayout: Optional[str] = None,
+    channel: Optional[str] = None
 ):
     """
     Detect fire, smoke, or hotspots in an image.
     
     Supports both file upload and base64 encoded images.
+    Accepts parameters via JSON body or form data.
     """
     global detection_stats
     
+    # Build request data from form fields or JSON body
     if not request_data:
-        request_data = DetectionRequest()
+        request_data = DetectionRequest(
+            streamId=streamId,
+            enableDetection=enableDetection if enableDetection is not None else True,
+            confidenceThreshold=confidenceThreshold,
+            streamType=StreamType(streamType) if streamType else None,
+            splitLayout=SplitLayout(splitLayout) if splitLayout else None,
+            channel=channel
+        )
     
     start_time = time.time()
     enabled = request_data.enableDetection and os.getenv("ENABLE_DETECTION", "true").lower() == "true"
@@ -294,8 +554,9 @@ async def detect(
     detection_stats["total_requests"] -= 1  # Correct the temporary increment
     
     model_info = {
-        "name": "YOLOv8",
-        "path": model_path,
+        "name": "Multi-Model (Color/Thermal)",
+        "color_path": color_model_path,
+        "thermal_path": thermal_model_path,
         "device": get_device_info(),
         "warmed_up": is_warmed_up,
     }
@@ -326,18 +587,16 @@ async def detect(
         else:
             image = process_base64_image(base64_image)
         
-        # Run inference
-        if is_warmed_up and model is not None:
-            # Resize image for consistent processing (optional)
-            original_shape = image.shape[:2]
-            # image = cv2.resize(image, (640, 640))  # Uncomment for fixed size
-            
-            # Run YOLO inference
+        # Run inference based on stream type
+        if is_warmed_up and (color_model is not None or thermal_model is not None):
             confidence_threshold = request_data.confidenceThreshold or float(os.getenv("CONFIDENCE_THRESHOLD", "0.25"))
-            results = model(image, conf=confidence_threshold, verbose=False)
             
-            # Format results
-            detections = format_detections(results, confidence_threshold)
+            # Determine stream type (default to COLOR for backward compatibility)
+            stream_type = request_data.streamType or StreamType.COLOR
+            split_layout = request_data.splitLayout
+            
+            # Route to appropriate detection pipeline
+            detections = route_detection(image, stream_type, split_layout, confidence_threshold)
             
         else:
             # Model not ready

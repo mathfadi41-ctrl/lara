@@ -86,11 +86,33 @@ POST /detect
 Content-Type: application/json
 ```
 
-**File Upload Example:**
+**File Upload Example (COLOR stream):**
 ```bash
 curl -X POST "http://localhost:8000/detect" \
   -F "file=@image.jpg" \
   -F "streamId=camera_001" \
+  -F "streamType=COLOR" \
+  -F "enableDetection=true" \
+  -F "confidenceThreshold=0.5"
+```
+
+**Thermal Stream Example:**
+```bash
+curl -X POST "http://localhost:8000/detect" \
+  -F "file=@thermal_image.jpg" \
+  -F "streamId=thermal_001" \
+  -F "streamType=THERMAL" \
+  -F "enableDetection=true" \
+  -F "confidenceThreshold=0.4"
+```
+
+**Split Stream Example:**
+```bash
+curl -X POST "http://localhost:8000/detect" \
+  -F "file=@split_image.jpg" \
+  -F "streamId=split_001" \
+  -F "streamType=SPLIT" \
+  -F "splitLayout=LEFT_RIGHT" \
   -F "enableDetection=true" \
   -F "confidenceThreshold=0.5"
 ```
@@ -102,34 +124,92 @@ curl -X POST "http://localhost:8000/detect" \
   -d '{
     "base64_image": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQ...",
     "streamId": "camera_001",
+    "streamType": "COLOR",
     "enableDetection": true,
     "confidenceThreshold": 0.5
   }'
 ```
 
-Response:
+**Response (COLOR stream):**
 ```json
 {
   "detections": [
     {
       "label": "fire",
       "confidence": 0.89,
+      "detectionType": "FIRE",
+      "channel": null,
       "boundingBox": {
         "x": 120,
         "y": 80,
         "width": 200,
         "height": 150
       }
+    },
+    {
+      "label": "smoke",
+      "confidence": 0.76,
+      "detectionType": "SMOKE",
+      "channel": null,
+      "boundingBox": {
+        "x": 300,
+        "y": 100,
+        "width": 150,
+        "height": 120
+      }
     }
   ],
   "inferenceTime": 0.045,
   "modelInfo": {
-    "name": "YOLOv8",
-    "path": "./models/yolov8n.pt",
+    "name": "Multi-Model (Color/Thermal)",
+    "color_path": "./models/yolov8n.pt",
+    "thermal_path": null,
     "device": "cuda",
     "warmed_up": true
   },
   "streamId": "camera_001",
+  "enabled": true
+}
+```
+
+**Response (SPLIT stream):**
+```json
+{
+  "detections": [
+    {
+      "label": "smoke",
+      "confidence": 0.82,
+      "detectionType": "SMOKE",
+      "channel": "color",
+      "boundingBox": {
+        "x": 100,
+        "y": 150,
+        "width": 80,
+        "height": 60
+      }
+    },
+    {
+      "label": "hotspot",
+      "confidence": 0.91,
+      "detectionType": "HOTSPOT",
+      "channel": "thermal",
+      "boundingBox": {
+        "x": 750,
+        "y": 200,
+        "width": 120,
+        "height": 100
+      }
+    }
+  ],
+  "inferenceTime": 0.062,
+  "modelInfo": {
+    "name": "Multi-Model (Color/Thermal)",
+    "color_path": "./models/yolov8n.pt",
+    "thermal_path": null,
+    "device": "cuda",
+    "warmed_up": true
+  },
+  "streamId": "split_001",
   "enabled": true
 }
 ```
@@ -177,7 +257,10 @@ Response:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `8000` | HTTP server port |
-| `MODEL_PATH` | `./models/yolov8n.pt` | Path to YOLO model weights |
+| `MODEL_PATH` | `./models/yolov8n.pt` | Path to YOLO model weights (legacy, use COLOR_MODEL_PATH) |
+| `COLOR_MODEL_PATH` | `./models/yolov8n.pt` | Path to RGB/color model weights for smoke/fire detection |
+| `THERMAL_MODEL_PATH` | `None` | Path to thermal model weights (optional, uses heuristic if not provided) |
+| `THERMAL_THRESHOLD` | `200.0` | Intensity threshold for heuristic thermal detection (0-255) |
 | `CONCURRENCY` | `4` | Number of uvicorn workers |
 | `LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
 | `MAX_DETECTIONS` | `100` | Maximum detections per request |
@@ -187,6 +270,38 @@ Response:
 | `MODELS_DIR` | `./models` | Directory for model storage |
 | `HEARTBEAT_INTERVAL` | `10` | Heartbeat interval in seconds |
 | `GRPC_PORT` | `50051` | gRPC server port |
+
+### Multi-Model Pipeline Configuration
+
+The AI service now supports multiple detection pipelines for different stream types:
+
+**Stream Types:**
+- `COLOR`: RGB streams using YOLO for smoke/fire detection
+- `THERMAL`: Thermal camera streams using intensity-based hotspot detection
+- `SPLIT`: Combined streams with side-by-side color and thermal feeds
+
+**Model Configuration:**
+
+```bash
+# Color model for RGB smoke/fire detection
+COLOR_MODEL_PATH=./models/fire_smoke_yolov8.pt
+
+# Thermal model (optional - if not provided, uses heuristic detector)
+THERMAL_MODEL_PATH=./models/thermal_hotspot_yolov8.pt
+
+# Thermal threshold for heuristic detector (0-255, higher = hotter regions only)
+THERMAL_THRESHOLD=180.0
+```
+
+**Split Layout Options:**
+- `LEFT_RIGHT`: Color on left, thermal on right
+- `TOP_BOTTOM`: Color on top, thermal on bottom
+
+The service automatically:
+- Routes COLOR streams to the RGB smoke/fire detector
+- Routes THERMAL streams to the thermal hotspot detector
+- Routes SPLIT streams to both detectors, splitting the frame and remapping bounding boxes
+- Tags each detection with `detectionType` (SMOKE, FIRE, HOTSPOT) and `channel` (color, thermal) for split streams
 
 ## Client SDK Usage
 
