@@ -40,6 +40,12 @@ docker-compose down
 1. **Install Python Dependencies:**
    ```bash
    cd apps/ai
+
+   # CPU-only PyTorch (falls back to PyPI for packages not present in the CPU index)
+   pip install --index-url https://download.pytorch.org/whl/cpu \
+     --extra-index-url https://pypi.org/simple \
+     torch torchvision
+
    pip install -r requirements.txt
    ```
 
