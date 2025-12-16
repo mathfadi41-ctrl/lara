@@ -1,6 +1,8 @@
 'use client';
 
 import axios, { AxiosError, AxiosInstance } from 'axios';
+import { disconnectSocket } from './socket';
+import { useAuthStore, useDetectionsStore, useStreamsStore } from './store';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -20,6 +22,11 @@ export interface AuthResponse {
 
 class ApiClient {
   private client: AxiosInstance;
+  private isRefreshing = false;
+  private failedQueue: Array<{
+    resolve: (token: string) => void;
+    reject: (error: any) => void;
+  }> = [];
 
   constructor() {
     this.client = axios.create({
@@ -33,7 +40,23 @@ class ApiClient {
         const originalRequest = error.config as AxiosError['config'] & { _retry?: boolean };
 
         if (error.response?.status === 401 && !originalRequest._retry) {
+          if (this.isRefreshing) {
+            return new Promise<string>((resolve, reject) => {
+              this.failedQueue.push({ resolve, reject });
+            })
+              .then((token) => {
+                if (originalRequest.headers) {
+                  originalRequest.headers.Authorization = `Bearer ${token}`;
+                }
+                return this.client(originalRequest);
+              })
+              .catch((err) => {
+                return Promise.reject(err);
+              });
+          }
+
           originalRequest._retry = true;
+          this.isRefreshing = true;
 
           try {
             const refreshToken = this.getRefreshToken();
@@ -46,22 +69,42 @@ class ApiClient {
 
               const { tokens } = response.data;
               this.setTokens(tokens);
+              this.client.defaults.headers.common['Authorization'] = `Bearer ${tokens.accessToken}`;
+              
+              this.processQueue(null, tokens.accessToken);
 
               if (originalRequest.headers) {
                 originalRequest.headers.Authorization = `Bearer ${tokens.accessToken}`;
               }
 
               return this.client(originalRequest);
+            } else {
+               throw new Error('No refresh token available');
             }
-          } catch {
-            this.clearTokens();
-            window.location.href = '/login';
+          } catch (refreshError) {
+            this.processQueue(refreshError, null);
+            this.logout();
+            return Promise.reject(refreshError);
+          } finally {
+            this.isRefreshing = false;
           }
         }
 
         return Promise.reject(error);
       }
     );
+  }
+
+  private processQueue(error: any, token: string | null = null) {
+    this.failedQueue.forEach((prom) => {
+      if (error) {
+        prom.reject(error);
+      } else {
+        prom.resolve(token as string);
+      }
+    });
+
+    this.failedQueue = [];
   }
 
   private getAccessToken(): string | null {
@@ -133,9 +176,28 @@ class ApiClient {
     return response.data;
   }
 
-  logout(): void {
+  async logout(): Promise<void> {
+    try {
+      const refreshToken = this.getRefreshToken();
+      if (refreshToken) {
+         await this.client.post('/auth/logout', { refreshToken });
+      }
+    } catch (e) {
+      // Ignore errors during logout
+    }
+
     this.clearTokens();
     delete this.client.defaults.headers.common['Authorization'];
+    disconnectSocket();
+    
+    // Clear stores
+    useAuthStore.getState().logout();
+    useDetectionsStore.getState().clearDetections();
+    useStreamsStore.getState().setSelectedStreamId(null);
+
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
   }
 
   // Users endpoints

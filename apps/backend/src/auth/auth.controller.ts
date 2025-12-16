@@ -29,4 +29,10 @@ export class AuthController {
   refresh(@Body() dto: RefreshDto): Promise<AuthResponseDto> {
     return this.authService.refresh(dto);
   }
+
+  @Post('logout')
+  @ApiOperation({ summary: 'Logout (revokes refresh token)' })
+  async logout(@Body() dto: RefreshDto): Promise<void> {
+    return this.authService.logout(dto.refreshToken);
+  }
 }

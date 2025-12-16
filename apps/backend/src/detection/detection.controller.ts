@@ -1,8 +1,11 @@
-import { Controller, Get, Param, Query, Res } from "@nestjs/common";
+import { Controller, Get, Param, Query, Res, UseGuards } from "@nestjs/common";
 import { DetectionService } from "./detection.service";
 import { Response } from "express";
 import * as fs from "fs/promises";
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { RolesGuard } from "../auth/guards/roles.guard";
 
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller("detections")
 export class DetectionController {
   constructor(private detectionService: DetectionService) {}
