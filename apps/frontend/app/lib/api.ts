@@ -6,6 +6,49 @@ import { useAuthStore, useDetectionsStore, useStreamsStore } from './store';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
+type ISODateString = string;
+
+export type StreamStatus = 'STOPPED' | 'STARTING' | 'RUNNING' | 'ERROR' | 'STOPPING';
+
+export interface Stream {
+  id: string;
+  name: string;
+  rtspUrl: string;
+  status: StreamStatus;
+  detectionEnabled: boolean;
+  fps: number;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  lastHeartbeat: ISODateString | null;
+  lastFrameAt: ISODateString | null;
+  avgLatencyMs: number;
+}
+
+export interface StreamHealth {
+  id: string;
+  name: string;
+  status: StreamStatus;
+  detectionEnabled: boolean;
+  fps: number;
+  lastHeartbeat: ISODateString | null;
+  lastFrameAt: ISODateString | null;
+  avgLatencyMs: number;
+}
+
+export interface CreateStreamInput {
+  name: string;
+  rtspUrl: string;
+  detectionEnabled?: boolean;
+  fps?: number;
+}
+
+export interface UpdateStreamInput {
+  name?: string;
+  rtspUrl?: string;
+  detectionEnabled?: boolean;
+  fps?: number;
+}
+
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
@@ -231,31 +274,37 @@ class ApiClient {
 
   // Streams endpoints
   async listStreams() {
-    return this.client.get<Array<Record<string, unknown>>>('/streams');
+    return this.client.get<Stream[]>('/streams');
   }
 
   async getStream(id: string) {
-    return this.client.get<Record<string, unknown>>(`/streams/${id}`);
+    return this.client.get<Stream>(`/streams/${id}`);
   }
 
-  async createStream(data: Record<string, unknown>) {
-    return this.client.post('/streams', data);
+  async createStream(data: CreateStreamInput) {
+    return this.client.post<Stream>('/streams', data);
   }
 
-  async updateStream(id: string, data: Record<string, unknown>) {
-    return this.client.patch(`/streams/${id}`, data);
+  async updateStream(id: string, data: UpdateStreamInput) {
+    return this.client.patch<Stream>(`/streams/${id}`, data);
+  }
+
+  async deleteStream(id: string) {
+    return this.client.delete<{ message: string }>(`/streams/${id}`);
   }
 
   async startStream(id: string) {
-    return this.client.post(`/streams/${id}/start`, {});
+    await this.client.post<{ message: string }>(`/streams/${id}/start`, {});
+    return this.getStream(id);
   }
 
   async stopStream(id: string) {
-    return this.client.post(`/streams/${id}/stop`, {});
+    await this.client.post<{ message: string }>(`/streams/${id}/stop`, {});
+    return this.getStream(id);
   }
 
   async getStreamHealth(id: string) {
-    return this.client.get(`/streams/${id}/health`);
+    return this.client.get<StreamHealth>(`/streams/${id}/health`);
   }
 
   // Detections endpoints

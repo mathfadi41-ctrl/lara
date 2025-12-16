@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import type { Stream } from '@/lib/api';
 import { apiClient } from '@/lib/api';
 import {
   Card,
@@ -32,7 +33,7 @@ const mockActivityData = [
  */
 
 export default function DashboardPage() {
-  const { data: streams, isLoading: streamsLoading } = useQuery({
+  const { data: streams, isLoading: streamsLoading } = useQuery<Stream[]>({
     queryKey: ['streams'],
     queryFn: () => apiClient.listStreams().then((res) => res.data),
   });
@@ -42,7 +43,7 @@ export default function DashboardPage() {
     queryFn: () => apiClient.listDetections({ take: 100 }).then((res) => res.data),
   });
 
-  const activeStreams = streams?.filter((s: any) => s.isRunning).length || 0;
+  const activeStreams = streams?.filter((s: Stream) => s.status === 'RUNNING').length || 0;
   const totalDetections = detections?.length || 0;
   const isLoading = streamsLoading || detectionsLoading;
 

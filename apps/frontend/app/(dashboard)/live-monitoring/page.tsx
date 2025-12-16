@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import type { Stream } from '@/lib/api';
 import { apiClient } from '@/lib/api';
 import {
   Card,
@@ -30,17 +31,16 @@ export default function LiveMonitoringPage() {
   const [detectionEnabled, setDetectionEnabled] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
 
-  const { data: streams, isLoading } = useQuery({
+  const { data: streams, isLoading } = useQuery<Stream[]>({
     queryKey: ['streams'],
-    queryFn: () => apiClient.listStreams().then((res) => res.data as Array<Record<string, unknown>>),
+    queryFn: () => apiClient.listStreams().then((res) => res.data),
   });
 
-  const selectedStream = streams?.find((s: Record<string, unknown>) => s.id === selectedStreamId);
+  const selectedStream = streams?.find((s) => s.id === selectedStreamId);
 
   useEffect(() => {
     if (streams && streams.length > 0 && !selectedStreamId) {
-      const firstStream = streams[0] as Record<string, unknown>;
-      setSelectedStreamId(firstStream.id as string);
+      setSelectedStreamId(streams[0].id);
     }
   }, [streams, selectedStreamId, setSelectedStreamId]);
 
@@ -88,11 +88,15 @@ export default function LiveMonitoringPage() {
                   <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-800">
                     <div
                       className={`h-3 w-3 rounded-full ${
-                        selectedStream?.isRunning ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-700'
+                        selectedStream?.status === 'RUNNING'
+                          ? 'bg-green-500'
+                          : selectedStream?.status === 'ERROR'
+                            ? 'bg-red-500'
+                            : 'bg-slate-300 dark:bg-slate-700'
                       }`}
                     />
                     <span className="text-sm">
-                      {selectedStream?.isRunning ? 'Running' : 'Stopped'}
+                      {selectedStream?.status || 'STOPPED'}
                     </span>
                   </div>
                 </div>
@@ -126,7 +130,7 @@ export default function LiveMonitoringPage() {
               </button>
             </CardHeader>
             <CardContent className="aspect-video bg-black">
-              {selectedStream && selectedStream.isRunning ? (
+              {selectedStream && selectedStream.status === 'RUNNING' ? (
                 <div className="h-full w-full flex items-center justify-center text-slate-400">
                   <div className="text-center">
                     <p className="text-sm">HLS/WebRTC stream would render here</p>

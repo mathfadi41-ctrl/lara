@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import type { Stream } from '@/lib/api';
 import { apiClient } from '@/lib/api';
 import {
   Card,
@@ -28,9 +29,9 @@ import { Button } from '@/components/ui/button';
 export default function DetectionsPage() {
   const [selectedStream, setSelectedStream] = useState<string>('');
 
-  const { data: streams } = useQuery({
+  const { data: streams } = useQuery<Stream[]>({
     queryKey: ['streams'],
-    queryFn: () => apiClient.listStreams().then((res) => res.data as Array<Record<string, unknown>>),
+    queryFn: () => apiClient.listStreams().then((res) => res.data),
   });
 
   const { data: detections, isLoading } = useQuery({
@@ -69,7 +70,7 @@ export default function DetectionsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">All streams</SelectItem>
-                  {streams?.map((stream: any) => (
+                  {streams?.map((stream) => (
                     <SelectItem key={stream.id} value={stream.id}>
                       {stream.name}
                     </SelectItem>
