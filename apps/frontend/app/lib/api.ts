@@ -362,11 +362,11 @@ class ApiClient {
 
   // Detections endpoints
   async listDetections(query?: Record<string, unknown>) {
-    return this.client.get<Array<Record<string, unknown>>>('/detections', { params: query });
+    return this.client.get<Detection[]>('/detections', { params: query });
   }
 
   async getDetection(id: string) {
-    return this.client.get<Record<string, unknown>>(`/detections/${id}`);
+    return this.client.get<Detection>(`/detections/${id}`);
   }
 
   async getDetectionScreenshotMetadata(id: string) {

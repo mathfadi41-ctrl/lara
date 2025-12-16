@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { Stream } from '@/lib/api';
+import type { Stream, Detection } from '@/lib/api';
 import { apiClient } from '@/lib/api';
 import {
   Card,
@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -36,17 +37,17 @@ export default function DetectionsPage() {
     queryFn: () => apiClient.listStreams().then((res) => res.data),
   });
 
-  const { data: detections, isLoading } = useQuery({
+  const { data: detections, isLoading } = useQuery<Detection[]>({
     queryKey: ['detections', selectedStream],
     queryFn: () =>
       apiClient.listDetections({
         streamId: selectedStream || undefined,
         take: 100,
-      }).then((res) => res.data as Array<Record<string, unknown>>),
+      }).then((res) => res.data as Detection[]),
   });
 
   // Helper functions for detection display
-  const getDetectionTypeInfo = (detection: Record<string, unknown>) => {
+  const getDetectionTypeInfo = (detection: Detection) => {
     const detectionType = (detection.detectionType || detection.type || '').toString().toUpperCase();
     
     switch (detectionType) {
@@ -81,8 +82,8 @@ export default function DetectionsPage() {
     }
   };
 
-  const getChannelInfo = (detection: Record<string, unknown>) => {
-    const channel = detection.channel as string;
+  const getChannelInfo = (detection: Detection) => {
+    const channel = detection.channel;
     if (!channel) return null;
     
     return {
@@ -171,7 +172,7 @@ export default function DetectionsPage() {
         <LoadingSkeletonCard count={3} variant="grid" />
       ) : filteredDetections && filteredDetections.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredDetections.map((detection: Record<string, unknown>) => {
+          {filteredDetections.map((detection: Detection) => {
             const typeInfo = getDetectionTypeInfo(detection);
             const channelInfo = getChannelInfo(detection);
             
