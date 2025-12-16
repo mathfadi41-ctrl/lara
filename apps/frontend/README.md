@@ -12,8 +12,10 @@ A comprehensive Next.js 16 admin dashboard for stream monitoring and AI detectio
 - **AI Detection**: Toggle AI detection per stream with real-time updates
 - **Detection History**: View and filter AI detection events
 - **Live Monitoring**: Real-time stream monitoring with WebSocket support
+- **Telemetry Map View**: Interactive map showing real-time stream positions, flight paths, and detection overlays
+- **Telemetry Controls**: Start/stop fake telemetry simulation for testing
 - **User Management**: Create and manage users (Admin only)
-- **Real-time Updates**: WebSocket integration for live detection events
+- **Real-time Updates**: WebSocket integration for live detection and telemetry events
 
 ## Setup
 
@@ -30,7 +32,14 @@ Create a `.env.local` file in the frontend directory:
 ```
 NEXT_PUBLIC_API_URL=http://localhost:4000
 NEXT_PUBLIC_AI_URL=http://localhost:8000
+
+# Optional: Map tile provider (defaults to OpenStreetMap)
+# Uncomment and configure for production use
+# NEXT_PUBLIC_MAP_TILE_URL=https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
+# NEXT_PUBLIC_MAP_TILE_ATTRIBUTION=© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors
 ```
+
+**Note**: The telemetry map view uses OpenStreetMap tiles by default. For production use, consider configuring a dedicated map tile provider like Mapbox, Google Maps, or others for better performance and reliability.
 
 ### Development
 
@@ -52,7 +61,7 @@ app/
 │   ├── streams/              # Stream management
 │   ├── users/                # User management (Admin only)
 │   ├── detections/           # Detection history
-│   ├── live-monitoring/      # Real-time stream monitoring
+│   ├── live-monitoring/      # Real-time stream monitoring with telemetry map
 │   └── settings/             # User settings
 ├── components/
 │   ├── layout/              # Layout components
@@ -88,6 +97,7 @@ public/                       # Static assets
 - **Form Handling**: React Hook Form + Zod
 - **HTTP Client**: Axios
 - **Real-time**: Socket.io-client
+- **Mapping**: react-leaflet + leaflet for telemetry visualization
 - **Theming**: next-themes
 - **Charts**: Recharts
 - **UI Components**: Radix UI + shadcn/ui

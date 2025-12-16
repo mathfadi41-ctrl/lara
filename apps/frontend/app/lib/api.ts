@@ -100,6 +100,21 @@ export interface AuthResponse {
   tokens: AuthTokens;
 }
 
+export interface TelemetryData {
+  id: string;
+  streamId: string;
+  latitude: number;
+  longitude: number;
+  altitude: number;
+  heading: number;
+  speed: number;
+  roll: number;
+  pitch: number;
+  yaw: number;
+  source: 'SIMULATOR' | 'DEVICE' | 'MANUAL';
+  createdAt: ISODateString;
+}
+
 class ApiClient {
   private client: AxiosInstance;
   private isRefreshing = false;
@@ -356,6 +371,32 @@ class ApiClient {
 
   async getDetectionScreenshotMetadata(id: string) {
     return this.client.get(`/detections/${id}/screenshot-metadata`);
+  }
+
+  // Telemetry endpoints
+  async listTelemetry(streamId: string, query?: { limit?: number; since?: string }) {
+    return this.client.get<TelemetryData[]>(`/streams/${streamId}/telemetry`, { params: query });
+  }
+
+  async latestTelemetry() {
+    return this.client.get<TelemetryData[]>('/telemetry/latest');
+  }
+
+  async getLatestTelemetry(streamId: string) {
+    return this.client.get<TelemetryData>(`/streams/${streamId}/telemetry/latest`);
+  }
+
+  // Telemetry simulator controls
+  async startTelemetrySimulator(streamId: string) {
+    return this.client.post<{ message: string }>(`/telemetry/simulator/${streamId}/start`, {});
+  }
+
+  async stopTelemetrySimulator(streamId: string) {
+    return this.client.post<{ message: string }>(`/telemetry/simulator/${streamId}/stop`, {});
+  }
+
+  async getSimulatorStatus() {
+    return this.client.get<Array<{ streamId: string; running: boolean }>>('/telemetry/simulator/status');
   }
 }
 
