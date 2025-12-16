@@ -18,6 +18,8 @@ export interface DetectionResult {
   label: string;
   confidence: number;
   boundingBox: BoundingBox;
+  detectionType?: string;
+  channel?: string;
 }
 
 export interface AIResponse {
@@ -61,7 +63,7 @@ export class DetectionService {
     this.pendingRequests.set(frame.streamId, pending + 1);
 
     try {
-      const detections = await this.detectObjects(frame.buffer);
+      const detections = await this.detectObjects(frame.buffer, stream.type, stream.splitLayout);
       const latencyMs = Date.now() - frameStartTime;
 
       // Update latency buffer
@@ -81,7 +83,7 @@ export class DetectionService {
       }
 
       if (detections.length > 0) {
-        await this.saveDetections(frame, detections, latencyMs);
+        await this.saveDetections(frame, detections, latencyMs, stream.type);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -106,11 +108,23 @@ export class DetectionService {
     });
   }
 
-  private async detectObjects(frameBuffer: Buffer): Promise<DetectionResult[]> {
+  private async detectObjects(
+    frameBuffer: Buffer,
+    streamType?: string,
+    splitLayout?: string | null,
+  ): Promise<DetectionResult[]> {
     try {
       const formData = new FormData();
       const blob = new Blob([frameBuffer], { type: "image/jpeg" });
       formData.append("file", blob, "frame.jpg");
+      
+      // Pass stream type and split layout to AI service for context
+      if (streamType) {
+        formData.append("streamType", streamType);
+      }
+      if (splitLayout) {
+        formData.append("splitLayout", splitLayout);
+      }
 
       const response = await axios.post<AIResponse>(
         `${this.aiServiceUrl}/detect`,
@@ -140,6 +154,7 @@ export class DetectionService {
     frame: FrameData,
     detections: DetectionResult[],
     latencyMs: number,
+    streamType?: string,
   ): Promise<void> {
     const storageDir = path.join(this.frameStoragePath, frame.streamId);
     await fs.mkdir(storageDir, { recursive: true });
@@ -151,15 +166,25 @@ export class DetectionService {
     await fs.writeFile(filepath, frame.buffer);
 
     for (const detection of detections) {
+      // Map label to detection type if not provided by AI service
+      const detectionType = detection.detectionType || this.mapLabelToDetectionType(detection.label);
+      
+      // Build metadata with channel info
+      const metadata: any = {};
+      if (detection.channel) {
+        metadata.channel = detection.channel;
+      }
+      
       const savedDetection = await this.prisma.detection.create({
         data: {
           streamId: frame.streamId,
           timestamp: frame.timestamp,
           label: detection.label,
+          detectionType: detectionType as any,
           confidence: detection.confidence,
           boundingBox: detection.boundingBox as any,
           imagePath: filepath,
-          metadata: {},
+          metadata,
         },
       });
 
@@ -169,16 +194,31 @@ export class DetectionService {
           streamId: frame.streamId,
           detectionId: savedDetection.id,
           label: detection.label,
+          detectionType,
           confidence: detection.confidence,
           boundingBox: detection.boundingBox,
           frameTimestamp: frame.timestamp,
           latencyMs,
+          channel: detection.channel,
+          streamType,
         },
         frame.streamId,
       );
     }
 
     this.logger.log(`Saved ${detections.length} detections for stream ${frame.streamId}`);
+  }
+
+  private mapLabelToDetectionType(label: string): string {
+    const lowerLabel = label.toLowerCase();
+    if (lowerLabel.includes('fire')) {
+      return 'FIRE';
+    } else if (lowerLabel.includes('hotspot')) {
+      return 'HOTSPOT';
+    } else if (lowerLabel.includes('smoke')) {
+      return 'SMOKE';
+    }
+    return 'SMOKE'; // Default
   }
 
   async getDetectionsByStream(streamId: string, limit = 50): Promise<any[]> {

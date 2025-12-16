@@ -64,6 +64,8 @@ describe("Stream Pipeline Integration", () => {
       expect(stream.status).toBe("STOPPED");
       expect(stream.detectionEnabled).toBe(true);
       expect(stream.fps).toBe(5);
+      expect(stream.type).toBe("COLOR");
+      expect(stream.splitLayout).toBeNull();
     });
 
     it("should create a stream with custom fps", async () => {
@@ -78,6 +80,32 @@ describe("Stream Pipeline Integration", () => {
 
       expect(stream.fps).toBe(15);
       expect(stream.detectionEnabled).toBe(false);
+    });
+
+    it("should create a THERMAL stream", async () => {
+      const createDto = {
+        name: "Thermal Camera",
+        rtspUrl: "rtsp://example.com/thermal",
+        type: "THERMAL",
+      };
+
+      const stream = await streamService.create(createDto);
+
+      expect(stream.type).toBe("THERMAL");
+    });
+
+    it("should create a SPLIT stream with layout", async () => {
+      const createDto = {
+        name: "Split View Camera",
+        rtspUrl: "rtsp://example.com/split",
+        type: "SPLIT",
+        splitLayout: "LEFT_RIGHT",
+      };
+
+      const stream = await streamService.create(createDto);
+
+      expect(stream.type).toBe("SPLIT");
+      expect(stream.splitLayout).toBe("LEFT_RIGHT");
     });
   });
 
