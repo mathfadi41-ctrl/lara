@@ -17,11 +17,6 @@ export class UpdateStreamDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsString()
-  webrtcUrl?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
   @IsBoolean()
   detectionEnabled?: boolean;
 

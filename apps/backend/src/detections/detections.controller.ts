@@ -12,11 +12,13 @@ function toDto(d: Detection): DetectionDto {
   return {
     id: d.id,
     streamId: d.streamId,
-    type: d.type,
+    detectionType: d.detectionType,
+    label: d.label,
     confidence: d.confidence,
-    boundingBoxes: d.boundingBoxes,
+    boundingBox: d.boundingBox,
     frameReference: d.frameReference,
     screenshotKey: d.screenshotKey,
+    timestamp: d.timestamp,
     createdAt: d.createdAt,
   };
 }

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { StreamType, SplitLayout } from '@prisma/client';
+import { StreamType, SplitLayout, StreamStatus } from '@prisma/client';
 
 export class StreamDto {
   @ApiProperty()
@@ -9,13 +9,16 @@ export class StreamDto {
   name!: string;
 
   @ApiPropertyOptional()
-  rtspUrl!: string | null;
-
-  @ApiPropertyOptional()
-  webrtcUrl!: string | null;
+  rtspUrl!: string;
 
   @ApiProperty()
   detectionEnabled!: boolean;
+
+  @ApiProperty()
+  fps!: number;
+
+  @ApiProperty({ enum: StreamStatus })
+  status!: StreamStatus;
 
   @ApiProperty({ enum: StreamType })
   type!: StreamType;
@@ -23,20 +26,14 @@ export class StreamDto {
   @ApiPropertyOptional({ enum: SplitLayout })
   splitLayout!: SplitLayout | null;
 
-  @ApiProperty()
-  isRunning!: boolean;
-
-  @ApiProperty()
-  isOnline!: boolean;
-
   @ApiPropertyOptional()
-  lastHealthCheckAt!: Date | null;
+  lastHeartbeat!: Date | null;
 
   @ApiPropertyOptional()
   lastFrameAt!: Date | null;
 
-  @ApiPropertyOptional()
-  lastError!: string | null;
+  @ApiProperty()
+  avgLatencyMs!: number;
 
   @ApiProperty()
   createdAt!: Date;

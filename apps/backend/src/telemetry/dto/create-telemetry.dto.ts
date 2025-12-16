@@ -7,37 +7,37 @@ export class CreateTelemetryDto {
   @IsNumber()
   @Min(-90)
   @Max(90)
-  latitude: number;
+  latitude!: number;
 
   @ApiProperty()
   @IsNumber()
   @Min(-180)
   @Max(180)
-  longitude: number;
+  longitude!: number;
 
   @ApiProperty()
   @IsNumber()
-  altitude: number;
+  altitude!: number;
 
   @ApiProperty()
   @IsNumber()
-  heading: number;
+  heading!: number;
 
   @ApiProperty()
   @IsNumber()
-  speed: number;
+  speed!: number;
 
   @ApiProperty()
   @IsNumber()
-  roll: number;
+  roll!: number;
 
   @ApiProperty()
   @IsNumber()
-  pitch: number;
+  pitch!: number;
 
   @ApiProperty()
   @IsNumber()
-  yaw: number;
+  yaw!: number;
 
   @ApiProperty({ enum: TelemetrySource, required: false })
   @IsEnum(TelemetrySource)
