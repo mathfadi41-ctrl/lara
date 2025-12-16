@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client';
-import { useDetectionsStore } from './store';
+import { useDetectionsStore, useTelemetryStore } from './store';
 import { toast } from 'sonner';
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
@@ -46,6 +46,24 @@ export const initializeSocket = (token: string): Socket => {
     if (currentSubscriptions.has(data.streamId)) {
       toast.success(`${data.type} detected`, {
         description: `Confidence: ${(data.confidence * 100).toFixed(1)}%`,
+      });
+    }
+  });
+
+  socket.on('telemetry:update', (data) => {
+    // Add telemetry to store
+    const telemetryPoint = {
+      id: data.id || `telemetry-${Date.now()}`,
+      ...data,
+      createdAt: data.timestamp || new Date().toISOString(),
+    };
+    
+    useTelemetryStore.getState().addTelemetryPoint(data.streamId, telemetryPoint);
+    
+    // Show toast notification for subscribed streams
+    if (currentSubscriptions.has(data.streamId)) {
+      toast.success(`Telemetry update`, {
+        description: `${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)} | ${data.speed.toFixed(1)}m/s`,
       });
     }
   });

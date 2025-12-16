@@ -1,7 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
-import type { StreamType, SplitLayout, DetectionType, DetectionChannel } from './api';
+import type { StreamType, SplitLayout, DetectionType, DetectionChannel, TelemetryData } from './api';
 
 export type UserRole = 'Admin' | 'Operator' | 'Viewer';
 
@@ -156,6 +156,148 @@ interface DetectionsState {
   getDetectionsByChannel: (streamId: string, channel: DetectionChannel) => Detection[];
   getDetectionsByType: (streamId: string, detectionType: DetectionType) => Detection[];
 }
+
+export interface TelemetryPoint extends TelemetryData {
+  // Extended with detection correlation
+  correlatedDetections?: string[];
+}
+
+interface TelemetryHistoryPoint {
+  telemetry: TelemetryPoint;
+  timestamp: Date;
+}
+
+interface TelemetryState {
+  // Per-stream telemetry data
+  telemetryHistory: Record<string, TelemetryHistoryPoint[]>;
+  latestTelemetry: Record<string, TelemetryPoint>;
+  
+  // Actions
+  addTelemetryPoint: (streamId: string, telemetry: TelemetryPoint) => void;
+  setTelemetryHistory: (streamId: string, history: TelemetryPoint[]) => void;
+  clearTelemetryHistory: (streamId: string) => void;
+  getTelemetryHistory: (streamId: string) => TelemetryPoint[];
+  getLatestTelemetry: (streamId: string) => TelemetryPoint | null;
+  getAllLatestTelemetry: () => TelemetryPoint[];
+  
+  // Detection correlation
+  correlateDetectionWithTelemetry: (streamId: string, detectionId: string, telemetryPoint: TelemetryPoint) => void;
+  
+  // Utility getters
+  getStreamPosition: (streamId: string) => { lat: number; lng: number } | null;
+  getStreamStats: (streamId: string) => { speed: number; altitude: number; heading: number } | null;
+}
+
+export const useTelemetryStore = create<TelemetryState>((set, get) => ({
+  telemetryHistory: {},
+  latestTelemetry: {},
+  
+  addTelemetryPoint: (streamId, telemetry) => {
+    const timestamp = new Date(telemetry.createdAt);
+    const historyPoint: TelemetryHistoryPoint = {
+      telemetry,
+      timestamp,
+    };
+    
+    set((state) => {
+      const currentHistory = state.telemetryHistory[streamId] || [];
+      const updatedHistory = [historyPoint, ...currentHistory]
+        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+        .slice(0, 100); // Keep only latest 100 points for performance
+      
+      return {
+        telemetryHistory: {
+          ...state.telemetryHistory,
+          [streamId]: updatedHistory,
+        },
+        latestTelemetry: {
+          ...state.latestTelemetry,
+          [streamId]: telemetry,
+        },
+      };
+    });
+  },
+  
+  setTelemetryHistory: (streamId, history) => {
+    const historyPoints: TelemetryHistoryPoint[] = history
+      .map(t => ({
+        telemetry: t,
+        timestamp: new Date(t.createdAt),
+      }))
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    
+    set((state) => ({
+      telemetryHistory: {
+        ...state.telemetryHistory,
+        [streamId]: historyPoints,
+      },
+    }));
+  },
+  
+  clearTelemetryHistory: (streamId) => {
+    set((state) => {
+      const { [streamId]: _removed, ...remaining } = state.telemetryHistory;
+      void _removed; // Intentionally unused variable to avoid TypeScript error
+      const { [streamId]: _removedLatest, ...remainingLatest } = state.latestTelemetry;
+      void _removedLatest; // Intentionally unused variable to avoid TypeScript error
+      return {
+        telemetryHistory: remaining,
+        latestTelemetry: remainingLatest,
+      };
+    });
+  },
+  
+  getTelemetryHistory: (streamId) => {
+    const history = get().telemetryHistory[streamId] || [];
+    return history.map(point => point.telemetry);
+  },
+  
+  getLatestTelemetry: (streamId) => {
+    return get().latestTelemetry[streamId] || null;
+  },
+  
+  getAllLatestTelemetry: () => {
+    const { latestTelemetry } = get();
+    return Object.values(latestTelemetry);
+  },
+  
+  correlateDetectionWithTelemetry: (streamId, detectionId, telemetryPoint) => {
+    const correlatedDetections = telemetryPoint.correlatedDetections || [];
+    if (!correlatedDetections.includes(detectionId)) {
+      const updatedTelemetry = {
+        ...telemetryPoint,
+        correlatedDetections: [...correlatedDetections, detectionId],
+      };
+      
+      set((state) => ({
+        latestTelemetry: {
+          ...state.latestTelemetry,
+          [streamId]: updatedTelemetry,
+        },
+      }));
+    }
+  },
+  
+  getStreamPosition: (streamId) => {
+    const latest = get().getLatestTelemetry(streamId);
+    if (latest) {
+      return { lat: latest.latitude, lng: latest.longitude };
+    }
+    return null;
+  },
+  
+  getStreamStats: (streamId) => {
+    const latest = get().getLatestTelemetry(streamId);
+    if (latest) {
+      return {
+        speed: latest.speed,
+        altitude: latest.altitude,
+        heading: latest.heading,
+      };
+    }
+    return null;
+  },
+}));
 
 export const useDetectionsStore = create<DetectionsState>((set, get) => ({
   detections: [],
