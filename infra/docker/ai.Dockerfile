@@ -10,8 +10,10 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PyTorch with CUDA support (if available)
-RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir \
+        --index-url https://download.pytorch.org/whl/cpu \
+        --extra-index-url https://pypi.org/simple \
+        torch torchvision
 
 # Install Python dependencies
 COPY apps/ai/requirements.txt ./requirements.txt
@@ -37,6 +39,8 @@ RUN apt-get update && apt-get install -y \
 # Copy installed packages from builder
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
+
+RUN python -c "import torch, torchvision; print(torch.__version__, torchvision.__version__)"
 
 # Copy application code
 COPY apps/ai/ ./
