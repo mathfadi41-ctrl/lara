@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../database/prisma.service";
+import { EventsGateway } from "../websocket/events.gateway";
 import axios from "axios";
 import * as fs from "fs/promises";
 import * as path from "path";
@@ -29,16 +30,20 @@ export class DetectionService {
   private readonly aiServiceUrl: string;
   private readonly frameStoragePath: string;
   private pendingRequests = new Map<string, number>();
+  private latencyBuffer = new Map<string, number[]>();
+  private lastMetricsUpdate = new Map<string, number>();
 
   constructor(
     private configService: ConfigService,
     private prisma: PrismaService,
+    private eventsGateway: EventsGateway,
   ) {
     this.aiServiceUrl = this.configService.get<string>("AI_SERVICE_URL") || "http://localhost:8000";
     this.frameStoragePath = this.configService.get<string>("FRAME_STORAGE_PATH") || "./storage/frames";
   }
 
   async processFrame(frame: FrameData): Promise<void> {
+    const frameStartTime = Date.now();
     const stream = await this.prisma.stream.findUnique({
       where: { id: frame.streamId },
     });
@@ -57,9 +62,26 @@ export class DetectionService {
 
     try {
       const detections = await this.detectObjects(frame.buffer);
+      const latencyMs = Date.now() - frameStartTime;
+
+      // Update latency buffer
+      const latencies = this.latencyBuffer.get(frame.streamId) || [];
+      latencies.push(latencyMs);
+      if (latencies.length > 100) {
+        latencies.shift();
+      }
+      this.latencyBuffer.set(frame.streamId, latencies);
+
+      // Update metrics throttled (every 500ms)
+      const now = Date.now();
+      const lastUpdate = this.lastMetricsUpdate.get(frame.streamId) || 0;
+      if (now - lastUpdate > 500) {
+        this.updateStreamMetrics(frame.streamId);
+        this.lastMetricsUpdate.set(frame.streamId, now);
+      }
 
       if (detections.length > 0) {
-        await this.saveDetections(frame, detections);
+        await this.saveDetections(frame, detections, latencyMs);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -67,6 +89,21 @@ export class DetectionService {
     } finally {
       this.pendingRequests.set(frame.streamId, Math.max(0, (this.pendingRequests.get(frame.streamId) || 1) - 1));
     }
+  }
+
+  private async updateStreamMetrics(streamId: string): Promise<void> {
+    const latencies = this.latencyBuffer.get(streamId) || [];
+    if (latencies.length === 0) return;
+
+    const avgLatencyMs = latencies.reduce((a, b) => a + b, 0) / latencies.length;
+
+    await this.prisma.stream.update({
+      where: { id: streamId },
+      data: {
+        lastFrameAt: new Date(),
+        avgLatencyMs,
+      },
+    });
   }
 
   private async detectObjects(frameBuffer: Buffer): Promise<DetectionResult[]> {
@@ -99,7 +136,11 @@ export class DetectionService {
     }
   }
 
-  private async saveDetections(frame: FrameData, detections: DetectionResult[]): Promise<void> {
+  private async saveDetections(
+    frame: FrameData,
+    detections: DetectionResult[],
+    latencyMs: number,
+  ): Promise<void> {
     const storageDir = path.join(this.frameStoragePath, frame.streamId);
     await fs.mkdir(storageDir, { recursive: true });
 
@@ -110,7 +151,7 @@ export class DetectionService {
     await fs.writeFile(filepath, frame.buffer);
 
     for (const detection of detections) {
-      await this.prisma.detection.create({
+      const savedDetection = await this.prisma.detection.create({
         data: {
           streamId: frame.streamId,
           timestamp: frame.timestamp,
@@ -121,6 +162,20 @@ export class DetectionService {
           metadata: {},
         },
       });
+
+      // Emit detection event to subscribed clients
+      this.eventsGateway.emitDetection(
+        {
+          streamId: frame.streamId,
+          detectionId: savedDetection.id,
+          label: detection.label,
+          confidence: detection.confidence,
+          boundingBox: detection.boundingBox,
+          frameTimestamp: frame.timestamp,
+          latencyMs,
+        },
+        frame.streamId,
+      );
     }
 
     this.logger.log(`Saved ${detections.length} detections for stream ${frame.streamId}`);

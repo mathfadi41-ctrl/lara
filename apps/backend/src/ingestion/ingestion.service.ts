@@ -47,6 +47,8 @@ export class IngestionService {
         "-flags low_delay",
         "-analyzeduration 1000000",
         "-probesize 1000000",
+        "-rtbufsize 0",
+        "-use_wallclock_as_timestamps 1",
       ])
       .outputOptions([
         "-vf", `fps=${fps}`,
