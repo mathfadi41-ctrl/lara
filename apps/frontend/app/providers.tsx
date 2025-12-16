@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '@/lib/store';
 import { apiClient } from '@/lib/api';
+import { initializeSocket, disconnectSocket } from '@/lib/socket';
 import { Toaster } from 'sonner';
 
 const queryClient = new QueryClient({
@@ -16,7 +17,7 @@ const queryClient = new QueryClient({
 });
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const { setUser, setLoading } = useAuthStore();
+  const { setUser, setLoading, user } = useAuthStore();
 
   useEffect(() => {
     const loadUser = async () => {
@@ -43,6 +44,27 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
     loadUser();
   }, [setUser, setLoading]);
+
+  // Socket lifecycle management
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken');
+    
+    if (user && token) {
+      // Initialize socket when user is authenticated
+      console.log('Initializing socket for authenticated user');
+      initializeSocket(token);
+    } else if (!user && !token) {
+      // Clean up socket when user logs out or no token
+      console.log('Disconnecting socket - no authenticated user');
+      disconnectSocket();
+    }
+
+    // Cleanup on unmount
+    return () => {
+      // Don't disconnect on unmount as user might navigate
+      // Disconnection is handled explicitly on logout
+    };
+  }, [user]);
 
   return (
     <QueryClientProvider client={queryClient}>
