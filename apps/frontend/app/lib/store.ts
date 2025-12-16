@@ -1,6 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
+import type { StreamType, SplitLayout, DetectionType, DetectionChannel } from './api';
 
 export type UserRole = 'Admin' | 'Operator' | 'Viewer';
 
@@ -126,6 +127,14 @@ export interface Detection {
     width: number;
     height: number;
   };
+  // Enhanced detection metadata
+  detectionType?: DetectionType;
+  channel?: DetectionChannel;
+  geoInfo?: {
+    latitude?: number;
+    longitude?: number;
+    altitude?: number;
+  };
   [key: string]: unknown;
 }
 
@@ -137,6 +146,15 @@ interface DetectionsState {
   clearDetections: () => void;
   clearDetectionsForStream: (streamId: string) => void;
   getDetectionsForStream: (streamId: string) => Detection[];
+  // Helper functions for stream type overlays
+  getDetectionColor: (detection: Detection, streamType?: StreamType) => string;
+  getDetectionStyle: (detection: Detection, streamType?: StreamType) => {
+    color: string;
+    icon: string;
+    label: string;
+  };
+  getDetectionsByChannel: (streamId: string, channel: DetectionChannel) => Detection[];
+  getDetectionsByType: (streamId: string, detectionType: DetectionType) => Detection[];
 }
 
 export const useDetectionsStore = create<DetectionsState>((set, get) => ({
@@ -178,5 +196,56 @@ export const useDetectionsStore = create<DetectionsState>((set, get) => ({
   
   getDetectionsForStream: (streamId) => {
     return get().detectionsByStream[streamId] || [];
+  },
+
+  // Helper functions for stream type overlays
+  getDetectionColor: (detection, streamType) => {
+    const detectionType = detection.detectionType || detection.type.toUpperCase();
+    
+    // Color mapping based on detection type and stream type
+    switch (detectionType) {
+      case 'FIRE':
+        return streamType === 'THERMAL' ? '#FF4400' : '#FF0000'; // Red for fire
+      case 'SMOKE':
+        return streamType === 'THERMAL' ? '#888888' : '#666666'; // Gray for smoke
+      case 'HOTSPOT':
+        return streamType === 'THERMAL' ? '#FFFF00' : '#FF8800'; // Yellow for hotspots
+      case 'PERSON':
+        return '#FF0000'; // Red for person
+      case 'VEHICLE':
+        return '#0000FF'; // Blue for vehicle
+      default:
+        return '#22C55E'; // Green for others
+    }
+  },
+
+  getDetectionStyle: (detection, streamType) => {
+    const detectionType = detection.detectionType || detection.type.toUpperCase();
+    const color = get().getDetectionColor(detection, streamType);
+    
+    switch (detectionType) {
+      case 'FIRE':
+        return { color, icon: '🔥', label: 'Fire' };
+      case 'SMOKE':
+        return { color, icon: '💨', label: 'Smoke' };
+      case 'HOTSPOT':
+        return { color, icon: '🌡️', label: 'Hotspot' };
+      case 'PERSON':
+        return { color, icon: '👤', label: 'Person' };
+      case 'VEHICLE':
+        return { color, icon: '🚗', label: 'Vehicle' };
+      default:
+        return { color, icon: '🔍', label: 'Detection' };
+    }
+  },
+
+  getDetectionsByChannel: (streamId, channel) => {
+    const streamDetections = get().getDetectionsForStream(streamId);
+    return streamDetections.filter(detection => detection.channel === channel);
+  },
+
+  getDetectionsByType: (streamId, detectionType) => {
+    const streamDetections = get().getDetectionsForStream(streamId);
+    return streamDetections.filter(detection => detection.detectionType === detectionType);
   },
 }));

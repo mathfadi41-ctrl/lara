@@ -10,6 +10,11 @@ type ISODateString = string;
 
 export type StreamStatus = 'STOPPED' | 'STARTING' | 'RUNNING' | 'ERROR' | 'STOPPING';
 
+export type StreamType = 'COLOR' | 'THERMAL' | 'SPLIT';
+export type SplitLayout = 'LEFT_RIGHT' | 'TOP_BOTTOM';
+export type DetectionType = 'SMOKE' | 'FIRE' | 'HOTSPOT';
+export type DetectionChannel = 'color' | 'thermal';
+
 export interface Stream {
   id: string;
   name: string;
@@ -22,6 +27,9 @@ export interface Stream {
   lastHeartbeat: ISODateString | null;
   lastFrameAt: ISODateString | null;
   avgLatencyMs: number;
+  // Stream type and layout configuration
+  type: StreamType;
+  splitLayout?: SplitLayout;
 }
 
 export interface StreamHealth {
@@ -33,6 +41,31 @@ export interface StreamHealth {
   lastHeartbeat: ISODateString | null;
   lastFrameAt: ISODateString | null;
   avgLatencyMs: number;
+  type?: StreamType;
+  splitLayout?: SplitLayout;
+}
+
+export interface Detection {
+  id: string;
+  type: string;
+  confidence: number;
+  createdAt: ISODateString;
+  streamId: string;
+  boundingBox?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  // Enhanced detection metadata
+  detectionType?: DetectionType;
+  channel?: DetectionChannel;
+  geoInfo?: {
+    latitude?: number;
+    longitude?: number;
+    altitude?: number;
+  };
+  [key: string]: unknown;
 }
 
 export interface CreateStreamInput {
@@ -40,6 +73,8 @@ export interface CreateStreamInput {
   rtspUrl: string;
   detectionEnabled?: boolean;
   fps?: number;
+  type?: StreamType;
+  splitLayout?: SplitLayout;
 }
 
 export interface UpdateStreamInput {
@@ -47,6 +82,8 @@ export interface UpdateStreamInput {
   rtspUrl?: string;
   detectionEnabled?: boolean;
   fps?: number;
+  type?: StreamType;
+  splitLayout?: SplitLayout;
 }
 
 export interface AuthTokens {
