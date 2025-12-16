@@ -22,6 +22,7 @@ model Stream {
   lastFrameAt      DateTime?
   avgLatencyMs     Float        @default(0)
   detections       Detection[]
+  telemetry        Telemetry[]
 
   @@index([status])
   @@map("streams")
@@ -43,6 +44,25 @@ model Detection {
   @@index([streamId, timestamp])
   @@index([timestamp])
   @@map("detections")
+}
+
+model Telemetry {
+  id        String          @id @default(cuid())
+  streamId  String
+  stream    Stream          @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  latitude  Float
+  longitude Float
+  altitude  Float
+  heading   Float
+  speed     Float
+  roll      Float
+  pitch     Float
+  yaw       Float
+  source    TelemetrySource @default(SIMULATOR)
+  createdAt DateTime        @default(now())
+
+  @@index([streamId, createdAt(sort: Desc)])
+  @@map("telemetry")
 }
 
 enum StreamStatus {
@@ -68,4 +88,10 @@ enum DetectionType {
   SMOKE
   FIRE
   HOTSPOT
+}
+
+enum TelemetrySource {
+  MAVLINK
+  SIMULATOR
+  MANUAL
 }

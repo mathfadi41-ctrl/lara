@@ -19,8 +19,8 @@ ALTER TABLE "detections" ADD COLUMN "detectionType" "DetectionType" NOT NULL DEF
 -- Map existing detection labels to detection types
 UPDATE "detections" 
 SET "detectionType" = CASE 
-  WHEN LOWER(label) LIKE '%fire%' THEN 'FIRE'::​"DetectionType"
-  WHEN LOWER(label) LIKE '%hotspot%' THEN 'HOTSPOT'::​"DetectionType"
-  WHEN LOWER(label) LIKE '%smoke%' THEN 'SMOKE'::​"DetectionType"
-  ELSE 'SMOKE'::​"DetectionType"
+  WHEN LOWER(label) LIKE '%fire%' THEN 'FIRE'::"DetectionType"
+  WHEN LOWER(label) LIKE '%hotspot%' THEN 'HOTSPOT'::"DetectionType"
+  WHEN LOWER(label) LIKE '%smoke%' THEN 'SMOKE'::"DetectionType"
+  ELSE 'SMOKE'::"DetectionType"
 END;

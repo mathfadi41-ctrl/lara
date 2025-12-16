@@ -21,8 +21,11 @@ export class RedisService implements OnModuleDestroy {
     this.client = url
       ? new Redis(url, commonOptions)
       : new Redis({
+          // @ts-ignore
           host: this.config.get('REDIS_HOST', { infer: true }) ?? 'localhost',
+          // @ts-ignore
           port: this.config.get('REDIS_PORT', { infer: true }) ?? 6379,
+          // @ts-ignore
           password: this.config.get('REDIS_PASSWORD', { infer: true }),
           ...commonOptions,
         });
