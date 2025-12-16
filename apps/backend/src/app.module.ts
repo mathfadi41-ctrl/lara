@@ -9,6 +9,7 @@ import { WebSocketModule } from "./websocket/websocket.module";
 import { IngestionModule } from "./ingestion/ingestion.module";
 import { AuthModule } from "./auth/auth.module";
 import { UsersModule } from "./users/users.module";
+import { TelemetryModule } from "./telemetry/telemetry.module";
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { UsersModule } from "./users/users.module";
     IngestionModule,
     AuthModule,
     UsersModule,
+    TelemetryModule,
   ],
   controllers: [AppController],
 })

@@ -6,6 +6,7 @@ import axios from "axios";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { FrameData } from "../ingestion/ingestion.service";
+import { TelemetryService } from "../telemetry/telemetry.service";
 
 export interface BoundingBox {
   x: number;
@@ -39,6 +40,7 @@ export class DetectionService {
     private configService: ConfigService,
     private prisma: PrismaService,
     private eventsGateway: EventsGateway,
+    private telemetryService: TelemetryService,
   ) {
     this.aiServiceUrl = this.configService.get<string>("AI_SERVICE_URL") || "http://localhost:8000";
     this.frameStoragePath = this.configService.get<string>("FRAME_STORAGE_PATH") || "./storage/frames";
@@ -165,6 +167,8 @@ export class DetectionService {
 
     await fs.writeFile(filepath, frame.buffer);
 
+    const telemetry = await this.telemetryService.getLatest(frame.streamId);
+
     for (const detection of detections) {
       // Map label to detection type if not provided by AI service
       const detectionType = detection.detectionType || this.mapLabelToDetectionType(detection.label);
@@ -173,6 +177,14 @@ export class DetectionService {
       const metadata: any = {};
       if (detection.channel) {
         metadata.channel = detection.channel;
+      }
+      if (telemetry) {
+        metadata.geo = {
+          latitude: telemetry.latitude,
+          longitude: telemetry.longitude,
+          altitude: telemetry.altitude,
+          heading: telemetry.heading,
+        };
       }
       
       const savedDetection = await this.prisma.detection.create({
@@ -201,6 +213,7 @@ export class DetectionService {
           latencyMs,
           channel: detection.channel,
           streamType,
+          geo: metadata.geo,
         },
         frame.streamId,
       );

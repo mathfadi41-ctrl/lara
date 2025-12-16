@@ -28,6 +28,26 @@ export interface DetectionEvent {
   latencyMs: number;
   channel?: string;
   streamType?: string;
+  geo?: {
+    latitude: number;
+    longitude: number;
+    altitude: number;
+    heading: number;
+  };
+}
+
+export interface TelemetryEvent {
+  streamId: string;
+  latitude: number;
+  longitude: number;
+  altitude: number;
+  heading: number;
+  speed: number;
+  roll: number;
+  pitch: number;
+  yaw: number;
+  timestamp: Date;
+  source: string;
 }
 
 @WebSocketGateway({
@@ -111,5 +131,9 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   emitHeartbeat(streamId: string) {
     this.server.emit("stream:heartbeat", { streamId, timestamp: new Date() });
+  }
+
+  emitTelemetry(event: TelemetryEvent) {
+    this.server.to(`stream:${event.streamId}`).emit("telemetry:update", event);
   }
 }
