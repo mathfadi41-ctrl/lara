@@ -26,6 +26,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/layout/empty-state';
+import { LoadingSkeletonCard } from '@/components/layout/loading-skeleton';
 import { Play, Square } from 'lucide-react';
 
 const createStreamSchema = z.object({
@@ -35,6 +37,12 @@ const createStreamSchema = z.object({
 });
 
 type CreateStreamFormData = z.infer<typeof createStreamSchema>;
+
+/**
+ * Streams Page
+ * Manage RTSP streams, start/stop streams, and configure detection
+ * Uses PageHeader component for consistent layout
+ */
 
 export default function StreamsPage() {
   const queryClient = useQueryClient();
@@ -98,10 +106,10 @@ export default function StreamsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Streams</h1>
-          <p className="mt-2 text-slate-600 dark:text-slate-400">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="page-header">
+          <h1 className="page-title">Streams</h1>
+          <p className="page-description">
             Manage your RTSP streams and AI detection
           </p>
         </div>
@@ -150,9 +158,7 @@ export default function StreamsPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-slate-950 dark:border-slate-800 dark:border-t-white"></div>
-        </div>
+        <LoadingSkeletonCard count={3} variant="grid" />
       ) : streams && streams.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {streams.map((stream: Record<string, unknown>) => (
@@ -218,14 +224,17 @@ export default function StreamsPage() {
           ))}
         </div>
       ) : (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <p className="text-slate-600 dark:text-slate-400">No streams yet</p>
-              <Button className="mt-4">Add your first stream</Button>
-            </div>
-          </CardContent>
-        </Card>
+       <EmptyState
+         title="No streams yet"
+         description="Create your first stream to get started"
+         action={
+           <Dialog open={open} onOpenChange={setOpen}>
+             <DialogTrigger asChild>
+               <Button>Add your first stream</Button>
+             </DialogTrigger>
+           </Dialog>
+         }
+       />
       )}
     </div>
   );

@@ -19,6 +19,8 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { PageHeader } from '@/components/layout/page-header';
+import { LoadingSkeletonCard } from '@/components/layout/loading-skeleton';
 import { useDetectionsStore, useStreamsStore } from '@/lib/store';
 import { Maximize2 } from 'lucide-react';
 
@@ -42,19 +44,20 @@ export default function LiveMonitoringPage() {
     }
   }, [streams, selectedStreamId, setSelectedStreamId]);
 
+  /**
+   * Live Monitoring Page
+   * Real-time stream viewing with AI detection overlay controls
+   */
+
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Live Monitoring</h1>
-        <p className="mt-2 text-slate-600 dark:text-slate-400">
-          Watch streams in real-time with AI detection overlays
-        </p>
-      </div>
+      <PageHeader
+        title="Live Monitoring"
+        description="Watch streams in real-time with AI detection overlays"
+      />
 
       {isLoading ? (
-        <div className="flex justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-slate-950 dark:border-slate-800 dark:border-t-white"></div>
-        </div>
+        <LoadingSkeletonCard count={2} />
       ) : (
         <>
           {/* Stream Selection */}

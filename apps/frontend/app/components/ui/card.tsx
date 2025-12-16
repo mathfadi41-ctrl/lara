@@ -1,12 +1,17 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
+/**
+ * Card components with consistent padding, spacing, and dark mode support
+ * Uses design tokens from globals.css for consistent spacing (p-6 = spacing-6 = 24px)
+ */
+
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
       className={cn(
-        'rounded-lg border border-slate-200 bg-white text-slate-950 shadow-sm dark:border-slate-800 dark:bg-slate-950 dark:text-slate-50',
+        'rounded-lg border border-slate-200 bg-white text-slate-950 shadow-sm transition-all duration-200 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-50',
         className
       )}
       {...props}
@@ -26,7 +31,7 @@ const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HT
   ({ className, ...props }, ref) => (
     <h2
       ref={ref}
-      className={cn('text-2xl font-semibold leading-none tracking-tight', className)}
+      className={cn('text-2xl font-semibold leading-none tracking-tight text-slate-950 dark:text-slate-50', className)}
       {...props}
     />
   )
