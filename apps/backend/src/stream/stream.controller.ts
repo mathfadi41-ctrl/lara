@@ -35,6 +35,11 @@ export class StreamController {
     return this.streamService.getHealth();
   }
 
+  @Get(":id/health")
+  getStreamHealth(@Param("id") id: string) {
+    return this.streamService.getStreamHealth(id);
+  }
+
   @Get(":id")
   findOne(@Param("id") id: string) {
     return this.streamService.findOne(id);

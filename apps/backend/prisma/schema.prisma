@@ -17,6 +17,8 @@ model Stream {
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
   lastHeartbeat    DateTime?
+  lastFrameAt      DateTime?
+  avgLatencyMs     Float        @default(0)
   detections       Detection[]
 
   @@index([status])

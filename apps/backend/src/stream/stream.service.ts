@@ -167,4 +167,19 @@ export class StreamService {
       unhealthyStreams: unhealthyStreams.map((s) => s.id),
     };
   }
+
+  async getStreamHealth(id: string) {
+    const stream = await this.findOne(id);
+
+    return {
+      id: stream.id,
+      name: stream.name,
+      status: stream.status,
+      detectionEnabled: stream.detectionEnabled,
+      fps: stream.fps,
+      lastHeartbeat: stream.lastHeartbeat,
+      lastFrameAt: stream.lastFrameAt,
+      avgLatencyMs: stream.avgLatencyMs,
+    };
+  }
 }

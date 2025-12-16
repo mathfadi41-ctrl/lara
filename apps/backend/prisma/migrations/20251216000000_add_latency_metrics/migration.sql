@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "streams" ADD COLUMN "lastFrameAt" TIMESTAMP(3),
+ADD COLUMN "avgLatencyMs" DOUBLE PRECISION NOT NULL DEFAULT 0;
