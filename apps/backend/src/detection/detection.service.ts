@@ -188,35 +188,35 @@ export class DetectionService {
       }
       
       const savedDetection = await this.prisma.detection.create({
-        data: {
-          streamId: frame.streamId,
-          timestamp: frame.timestamp,
-          label: detection.label,
-          detectionType: detectionType as any,
-          confidence: detection.confidence,
-          boundingBox: detection.boundingBox as any,
-          imagePath: filepath,
-          metadata,
-        },
-      });
+         data: {
+           streamId: frame.streamId,
+           timestamp: frame.timestamp,
+           label: detection.label,
+           detectionType: detectionType as any,
+           confidence: detection.confidence,
+           boundingBox: detection.boundingBox as any,
+           imagePath: filepath,
+           metadata,
+         },
+       });
 
       // Emit detection event to subscribed clients
       this.eventsGateway.emitDetection(
-        {
-          streamId: frame.streamId,
-          detectionId: savedDetection.id,
-          label: detection.label,
-          detectionType,
-          confidence: detection.confidence,
-          boundingBox: detection.boundingBox,
-          frameTimestamp: frame.timestamp,
-          latencyMs,
-          channel: detection.channel,
-          streamType,
-          geo: metadata.geo,
-        },
-        frame.streamId,
-      );
+         {
+           streamId: frame.streamId,
+           detectionId: savedDetection.id,
+           label: detection.label,
+           detectionType,
+           confidence: detection.confidence,
+           boundingBox: detection.boundingBox as any,
+           frameTimestamp: frame.timestamp,
+           latencyMs,
+           channel: detection.channel,
+           streamType,
+           geo: metadata.geo,
+         },
+         frame.streamId,
+       );
     }
 
     this.logger.log(`Saved ${detections.length} detections for stream ${frame.streamId}`);

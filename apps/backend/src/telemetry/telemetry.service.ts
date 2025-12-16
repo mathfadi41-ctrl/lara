@@ -78,6 +78,6 @@ export class TelemetryService {
        }
      });
      
-     return streams.map(s => s.telemetry[0]).filter(Boolean);
+     return streams.map((s: any) => s.telemetry[0]).filter(Boolean);
   }
 }

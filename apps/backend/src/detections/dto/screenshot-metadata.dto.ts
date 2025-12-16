@@ -7,8 +7,8 @@ export class ScreenshotMetadataDto {
   @ApiPropertyOptional()
   screenshotKey!: string | null;
 
-  @ApiProperty()
-  frameReference!: string;
+  @ApiPropertyOptional()
+  frameReference!: string | null;
 
   @ApiProperty()
   createdAt!: Date;

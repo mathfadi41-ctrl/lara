@@ -7,6 +7,37 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id            String          @id @default(cuid())
+  email         String          @unique
+  passwordHash  String
+  role          Role            @default(Viewer)
+  refreshTokens RefreshToken[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id
+  tokenHash String    @unique
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+enum Role {
+  Admin
+  Operator
+  Viewer
+}
+
 model Stream {
   id               String       @id @default(cuid())
   name             String
@@ -29,17 +60,19 @@ model Stream {
 }
 
 model Detection {
-  id            String        @id @default(cuid())
-  streamId      String
-  stream        Stream        @relation(fields: [streamId], references: [id], onDelete: Cascade)
-  timestamp     DateTime      @default(now())
-  confidence    Float
-  label         String
-  detectionType DetectionType @default(SMOKE)
-  boundingBox   Json
-  imagePath     String
-  metadata      Json?
-  createdAt     DateTime      @default(now())
+  id              String        @id @default(cuid())
+  streamId        String
+  stream          Stream        @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  timestamp       DateTime      @default(now())
+  confidence      Float
+  label           String
+  detectionType   DetectionType @default(SMOKE)
+  boundingBox     Json
+  imagePath       String
+  screenshotKey   String?
+  frameReference  String?
+  metadata        Json?
+  createdAt       DateTime      @default(now())
 
   @@index([streamId, timestamp])
   @@index([timestamp])

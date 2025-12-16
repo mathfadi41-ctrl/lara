@@ -22,15 +22,13 @@ export class StreamsService {
   async create(data: {
     name: string;
     rtspUrl?: string;
-    webrtcUrl?: string;
     detectionEnabled?: boolean;
     type?: string;
     splitLayout?: string;
   }): Promise<Stream> {
     const createData: Prisma.StreamCreateInput = {
       name: data.name,
-      rtspUrl: data.rtspUrl,
-      webrtcUrl: data.webrtcUrl,
+      rtspUrl: data.rtspUrl ?? '',
       detectionEnabled: data.detectionEnabled ?? false,
       type: data.type as any,
       splitLayout: data.splitLayout as any,
@@ -44,23 +42,22 @@ export class StreamsService {
     data: {
       name?: string;
       rtspUrl?: string;
-      webrtcUrl?: string;
       detectionEnabled?: boolean;
       type?: string;
       splitLayout?: string;
     },
   ): Promise<Stream> {
     try {
+      const updateData: Prisma.StreamUpdateInput = {};
+      if (data.name) updateData.name = data.name;
+      if (data.rtspUrl) updateData.rtspUrl = data.rtspUrl;
+      if (data.detectionEnabled !== undefined) updateData.detectionEnabled = data.detectionEnabled;
+      if (data.type) updateData.type = data.type as any;
+      if (data.splitLayout) updateData.splitLayout = data.splitLayout as any;
+
       return await this.prisma.stream.update({
         where: { id },
-        data: {
-          name: data.name,
-          rtspUrl: data.rtspUrl,
-          webrtcUrl: data.webrtcUrl,
-          detectionEnabled: data.detectionEnabled,
-          type: data.type as any,
-          splitLayout: data.splitLayout as any,
-        },
+        data: updateData,
       });
     } catch {
       throw new NotFoundException('Stream not found');
@@ -72,10 +69,8 @@ export class StreamsService {
       return await this.prisma.stream.update({
         where: { id },
         data: {
-          isRunning: true,
-          isOnline: true,
-          lastHealthCheckAt: new Date(),
-          lastError: null,
+          status: 'RUNNING',
+          lastHeartbeat: new Date(),
         },
       });
     } catch {
@@ -88,8 +83,7 @@ export class StreamsService {
       return await this.prisma.stream.update({
         where: { id },
         data: {
-          isRunning: false,
-          lastHealthCheckAt: new Date(),
+          status: 'STOPPED',
         },
       });
     } catch {
@@ -97,16 +91,14 @@ export class StreamsService {
     }
   }
 
-  async health(id: string): Promise<Pick<Stream, 'id' | 'isRunning' | 'isOnline' | 'lastHealthCheckAt' | 'lastFrameAt' | 'lastError' | 'detectionEnabled'>> {
+  async health(id: string): Promise<Pick<Stream, 'id' | 'status' | 'lastHeartbeat' | 'lastFrameAt' | 'detectionEnabled'>> {
     const stream = await this.findById(id);
 
     return {
       id: stream.id,
-      isRunning: stream.isRunning,
-      isOnline: stream.isOnline,
-      lastHealthCheckAt: stream.lastHealthCheckAt,
+      status: stream.status,
+      lastHeartbeat: stream.lastHeartbeat,
       lastFrameAt: stream.lastFrameAt,
-      lastError: stream.lastError,
       detectionEnabled: stream.detectionEnabled,
     };
   }

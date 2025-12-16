@@ -9,15 +9,9 @@ export class CreateStreamDto {
   @MaxLength(128)
   name!: string;
 
-  @ApiPropertyOptional()
-  @IsOptional()
+  @ApiProperty()
   @IsString()
-  rtspUrl?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  webrtcUrl?: string;
+  rtspUrl!: string;
 
   @ApiPropertyOptional({ default: false })
   @IsOptional()

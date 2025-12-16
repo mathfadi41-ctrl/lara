@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { DetectionType } from '@prisma/client';
 
 export class DetectionDto {
   @ApiProperty()
@@ -7,20 +8,26 @@ export class DetectionDto {
   @ApiProperty()
   streamId!: string;
 
+  @ApiProperty({ enum: ['SMOKE', 'FIRE', 'HOTSPOT'] })
+  detectionType!: DetectionType;
+
   @ApiProperty()
-  type!: string;
+  label!: string;
 
   @ApiProperty()
   confidence!: number;
 
-  @ApiProperty({ description: 'Array/object describing bounding boxes', type: 'object' })
-  boundingBoxes!: unknown;
+  @ApiProperty({ description: 'Bounding box describing detection location', type: 'object' })
+  boundingBox!: unknown;
 
-  @ApiProperty()
-  frameReference!: string;
+  @ApiPropertyOptional()
+  frameReference!: string | null;
 
   @ApiPropertyOptional()
   screenshotKey!: string | null;
+
+  @ApiProperty()
+  timestamp!: Date;
 
   @ApiProperty()
   createdAt!: Date;
