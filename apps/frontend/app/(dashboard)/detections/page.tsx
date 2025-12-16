@@ -19,6 +19,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { PageHeader } from '@/components/layout/page-header';
+import { EmptyState } from '@/components/layout/empty-state';
+import { LoadingSkeletonCard } from '@/components/layout/loading-skeleton';
 import { Download, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -39,14 +42,17 @@ export default function DetectionsPage() {
       }).then((res) => res.data as Array<Record<string, unknown>>),
   });
 
+  /**
+   * Detections Page
+   * View and manage AI detection events with filtering capabilities
+   */
+
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Detection History</h1>
-        <p className="mt-2 text-slate-600 dark:text-slate-400">
-          View and manage AI detection events
-        </p>
-      </div>
+      <PageHeader
+        title="Detection History"
+        description="View and manage AI detection events"
+      />
 
       {/* Filters */}
       <Card>
@@ -102,9 +108,7 @@ export default function DetectionsPage() {
 
       {/* Detections Grid */}
       {isLoading ? (
-        <div className="flex justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-slate-950 dark:border-slate-800 dark:border-t-white"></div>
-        </div>
+        <LoadingSkeletonCard count={3} variant="grid" />
       ) : detections && detections.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {detections.map((detection: any) => (
@@ -156,15 +160,10 @@ export default function DetectionsPage() {
           ))}
         </div>
       ) : (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <p className="text-slate-600 dark:text-slate-400">
-                No detections found
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <EmptyState
+          title="No detections found"
+          description="Detection events will appear here when AI detection is active"
+        />
       )}
     </div>
   );

@@ -159,13 +159,141 @@ The dashboard connects to WebSocket at the API URL for real-time updates:
 - `stream:enable-detection` - Enable detection for stream
 - `stream:disable-detection` - Disable detection for stream
 
+## Design Tokens & Theme System
+
+The dashboard implements a comprehensive design token system defined in `app/globals.css` for consistent styling across all pages and components.
+
+### Design Tokens
+
+#### Spacing Scale (8px base)
+```css
+--spacing-1: 0.25rem (4px)
+--spacing-2: 0.5rem (8px)
+--spacing-3: 0.75rem (12px)
+--spacing-4: 1rem (16px)
+--spacing-6: 1.5rem (24px)
+--spacing-8: 2rem (32px)
+--spacing-12: 3rem (48px)
+--spacing-16: 4rem (64px)
+```
+
+#### Border Radius Scale
+```css
+--radius-sm: 0.375rem (6px)
+--radius-md: 0.5rem (8px)
+--radius-lg: 0.75rem (12px)
+--radius-xl: 1rem (16px)
+```
+
+#### Transition Durations
+```css
+--duration-fast: 150ms
+--duration-base: 200ms
+--duration-slow: 300ms
+```
+
+#### Focus States
+The dashboard uses consistent focus ring styling for accessibility (WCAG AA compliant):
+- Focus ring: 2px blue-500 (dark: blue-400)
+- Ring offset: 2px
+- Applied via `.focus-ring` and `.focus-ring-sm` utility classes
+
+#### Semantic Colors (Light/Dark Mode)
+```css
+Light mode:
+--color-background: white
+--color-foreground: dark slate
+--color-surface: light slate (50)
+--color-text-primary: dark slate (950)
+--color-text-secondary: medium slate (600)
+
+Dark mode:
+--color-background: dark slate (950)
+--color-foreground: near white
+--color-surface: medium slate (800)
+--color-text-primary: near white
+--color-text-secondary: light slate (400)
+```
+
+### Reusable Component System
+
+#### Layout Components
+- **PageHeader**: Consistent page header with title, description, and optional action
+  ```tsx
+  <PageHeader
+    title="Streams"
+    description="Manage your RTSP streams"
+    action={<Button>Add Stream</Button>}
+  />
+  ```
+
+- **PageSection**: Wrapper providing consistent spacing between sections
+  ```tsx
+  <PageSection>
+    {/* Content with automatic spacing */}
+  </PageSection>
+  ```
+
+- **EmptyState**: Consistent empty state styling with icon, title, description, and action
+  ```tsx
+  <EmptyState
+    title="No items"
+    description="Create your first item to get started"
+    action={<Button>Create</Button>}
+  />
+  ```
+
+- **LoadingSkeletonCard**: Skeleton loaders matching card design
+  ```tsx
+  <LoadingSkeletonCard count={3} variant="grid" />
+  ```
+
+#### UI Components
+All UI components use consistent design tokens for:
+- **Button**: Focus rings, hover states, dark mode variants
+- **Input**: Consistent padding (h-10, px-3, py-2), focus states
+- **Card**: Uniform spacing (p-6), dark mode support, transitions
+
+### Shell Layout
+
+The dashboard shell (`app/(dashboard)/layout.tsx`) implements:
+- Responsive design (mobile ≤1024px, desktop >1024px)
+- Consistent padding: p-4 (mobile), p-6 (tablet), p-8 (desktop)
+- Unified background colors (no duplication)
+- Smooth mobile navigation with overlay
+- Focus states on all interactive elements
+
+### CSS Classes
+
+Utility classes available in `globals.css`:
+- `.focus-ring` - Default focus ring (2px offset)
+- `.focus-ring-sm` - Compact focus ring (0px offset)
+- `.page-section` - Page container with spacing (space-y-8)
+- `.page-header` - Header section (space-y-2)
+- `.page-title` - Page title styling (text-3xl, bold, tracked)
+- `.page-description` - Description text (text-base, secondary color)
+- `.skeleton` - Pulse skeleton loader
+- `.empty-state` - Empty state container
+- `.empty-state-icon` - Icon styling for empty states
+- `.empty-state-title` - Title in empty states
+- `.empty-state-description` - Description in empty states
+
+### Styling Best Practices
+
+1. **Use PageHeader** for all dashboard page titles
+2. **Use PageSection** to wrap page content for consistent spacing
+3. **Use EmptyState** for no-data states instead of custom cards
+4. **Use LoadingSkeletonCard** for loading states
+5. Apply `.focus-ring` to custom interactive elements
+6. Use semantic color variables for light/dark mode consistency
+
 ## Styling
 
-The dashboard uses Tailwind CSS 4 with custom theme variables:
+The dashboard uses Tailwind CSS 4 with custom design tokens:
 
 - Light mode: Light backgrounds with dark text
 - Dark mode: Dark backgrounds with light text
-- Color palette: Slate-based with custom primary/secondary colors
+- Color palette: Slate-based with accessibility-focused focus states
 
 Theme can be toggled via the sun/moon icon in the header.
 
@@ -173,14 +301,21 @@ Theme can be toggled via the sun/moon icon in the header.
 
 All UI components are built with Radix UI primitives and styled with Tailwind CSS:
 
-- **Button**: Various styles (default, outline, ghost, destructive)
-- **Card**: Container component for content
-- **Input**: Text input with validation styling
+- **Button**: Various styles (default, outline, ghost, destructive) with accessible focus states
+- **Card**: Container component with consistent padding and spacing
+- **Input**: Text input with consistent height, padding, and focus styling
 - **Label**: Form labels
 - **Dialog**: Modal for forms and confirmations
 - **Select**: Dropdown selection
 - **Switch**: Toggle switches
 - **Tabs**: Tabbed content
+
+### Layout Components
+
+- **PageHeader**: Reusable header with title, description, and action
+- **PageSection**: Container for consistent spacing
+- **EmptyState**: Empty state display with icon and action
+- **LoadingSkeletonCard**: Loading skeleton matching card design
 
 ## Authentication & Security
 
