@@ -29,13 +29,24 @@ import {
 } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/layout/empty-state';
 import { LoadingSkeletonCard } from '@/components/layout/loading-skeleton';
-import { Pencil, Play, Square, Trash2 } from 'lucide-react';
+import { Pencil, Play, Square, Trash2, Thermometer, Camera, Split } from 'lucide-react';
+import type { StreamType, SplitLayout } from '@/lib/api';
 
 const createStreamSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   rtspUrl: z.string().url('Invalid RTSP URL'),
   fps: z.coerce.number().int().min(1).max(30).default(5),
   detectionEnabled: z.boolean().default(true),
+  type: z.enum(['COLOR', 'THERMAL', 'SPLIT']).default('COLOR'),
+  splitLayout: z.enum(['LEFT_RIGHT', 'TOP_BOTTOM']).optional(),
+}).refine((data) => {
+  if (data.type === 'SPLIT' && !data.splitLayout) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Split layout is required for SPLIT stream type",
+  path: ['splitLayout'],
 });
 
 type CreateStreamFormData = z.infer<typeof createStreamSchema>;
@@ -44,9 +55,45 @@ const editStreamSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   rtspUrl: z.string().url('Invalid RTSP URL'),
   fps: z.coerce.number().int().min(1).max(30),
+  type: z.enum(['COLOR', 'THERMAL', 'SPLIT']),
+  splitLayout: z.enum(['LEFT_RIGHT', 'TOP_BOTTOM']).optional(),
+}).refine((data) => {
+  if (data.type === 'SPLIT' && !data.splitLayout) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Split layout is required for SPLIT stream type",
+  path: ['splitLayout'],
 });
 
 type EditStreamFormData = z.infer<typeof editStreamSchema>;
+
+// Stream type helper functions
+function getStreamTypeInfo(type: StreamType) {
+  switch (type) {
+    case 'COLOR':
+      return { label: 'Color', icon: <Camera className="h-4 w-4" />, color: 'text-blue-600', bg: 'bg-blue-50' };
+    case 'THERMAL':
+      return { label: 'Thermal', icon: <Thermometer className="h-4 w-4" />, color: 'text-red-600', bg: 'bg-red-50' };
+    case 'SPLIT':
+      return { label: 'Split', icon: <Split className="h-4 w-4" />, color: 'text-purple-600', bg: 'bg-purple-50' };
+    default:
+      return { label: 'Unknown', icon: <Camera className="h-4 w-4" />, color: 'text-gray-600', bg: 'bg-gray-50' };
+  }
+}
+
+function getSplitLayoutInfo(layout?: SplitLayout) {
+  if (!layout) return null;
+  switch (layout) {
+    case 'LEFT_RIGHT':
+      return { label: 'Left|Right', icon: '↔️' };
+    case 'TOP_BOTTOM':
+      return { label: 'Top|Bottom', icon: '↕️' };
+    default:
+      return { label: 'Unknown', icon: '❓' };
+  }
+}
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (!error || typeof error !== 'object') return fallback;
@@ -136,6 +183,27 @@ function StatusBadge({ status, stale }: { status: StreamStatus; stale: boolean }
     <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${classes}`}>
       {label}
     </span>
+  );
+}
+
+function StreamTypeBadge({ type, splitLayout }: { type?: StreamType; splitLayout?: SplitLayout }) {
+  if (!type) return null;
+  
+  const typeInfo = getStreamTypeInfo(type);
+  const layoutInfo = getSplitLayoutInfo(splitLayout);
+  
+  return (
+    <div className="flex items-center gap-1">
+      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${typeInfo.bg} ${typeInfo.color}`}>
+        {typeInfo.icon}
+        {typeInfo.label}
+      </span>
+      {layoutInfo && (
+        <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+          {layoutInfo.icon} {layoutInfo.label}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -322,6 +390,8 @@ function StreamCard({ stream }: { stream: Stream }) {
       name: stream.name,
       rtspUrl: stream.rtspUrl,
       fps: stream.fps,
+      type: stream.type || 'COLOR',
+      splitLayout: stream.splitLayout,
     },
   });
 
@@ -331,8 +401,10 @@ function StreamCard({ stream }: { stream: Stream }) {
       name: stream.name,
       rtspUrl: stream.rtspUrl,
       fps,
+      type: stream.type || 'COLOR',
+      splitLayout: stream.splitLayout,
     });
-  }, [editOpen, editForm, stream.name, stream.rtspUrl, fps]);
+  }, [editOpen, editForm, stream.name, stream.rtspUrl, fps, stream.type, stream.splitLayout]);
 
   const editMutation = useMutation({
     mutationFn: async (data: EditStreamFormData) => apiClient.updateStream(stream.id, data),
@@ -388,6 +460,10 @@ function StreamCard({ stream }: { stream: Stream }) {
           <div className="min-w-0">
             <CardTitle className="text-lg truncate">{stream.name}</CardTitle>
             <CardDescription className="mt-1 truncate">{stream.rtspUrl}</CardDescription>
+            {/* Stream type badge */}
+            <div className="mt-2">
+              <StreamTypeBadge type={stream.type} splitLayout={stream.splitLayout} />
+            </div>
           </div>
           <div className="flex flex-col items-end gap-2">
             <StatusBadge status={status} stale={heartbeatStale} />
@@ -430,6 +506,69 @@ function StreamCard({ stream }: { stream: Stream }) {
                       <p className="text-sm text-red-500">{editForm.formState.errors.fps.message}</p>
                     )}
                   </div>
+
+                  {/* Stream Type Selection in Edit */}
+                  <div className="space-y-3">
+                    <Label>Stream Type</Label>
+                    <Controller
+                      control={editForm.control}
+                      name="type"
+                      render={({ field }) => (
+                        <div className="grid grid-cols-3 gap-2">
+                          {(['COLOR', 'THERMAL', 'SPLIT'] as StreamType[]).map((type) => {
+                            const typeInfo = getStreamTypeInfo(type);
+                            return (
+                              <Button
+                                key={type}
+                                type="button"
+                                variant={field.value === type ? "default" : "outline"}
+                                className={`justify-start gap-2 ${field.value === type ? typeInfo.bg : ''}`}
+                                onClick={() => field.onChange(type)}
+                              >
+                                {typeInfo.icon}
+                                {typeInfo.label}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    />
+                    {editForm.formState.errors.type && (
+                      <p className="text-sm text-red-500">{editForm.formState.errors.type.message}</p>
+                    )}
+                  </div>
+
+                  {/* Split Layout Selection in Edit (conditional) */}
+                  {editForm.watch('type') === 'SPLIT' && (
+                    <div className="space-y-3">
+                      <Label>Split Layout</Label>
+                      <Controller
+                        control={editForm.control}
+                        name="splitLayout"
+                        render={({ field }) => (
+                          <div className="grid grid-cols-2 gap-2">
+                            {(['LEFT_RIGHT', 'TOP_BOTTOM'] as SplitLayout[]).map((layout) => {
+                              const layoutInfo = getSplitLayoutInfo(layout);
+                              return (
+                                <Button
+                                  key={layout}
+                                  type="button"
+                                  variant={field.value === layout ? "default" : "outline"}
+                                  className="justify-start gap-2"
+                                  onClick={() => field.onChange(layout)}
+                                >
+                                  {layoutInfo?.icon} {layoutInfo?.label}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      />
+                      {editForm.formState.errors.splitLayout && (
+                        <p className="text-sm text-red-500">{editForm.formState.errors.splitLayout.message}</p>
+                      )}
+                    </div>
+                  )}
 
                   <div className="flex gap-2">
                     <Button type="submit" className="flex-1" disabled={editMutation.isPending}>
@@ -551,6 +690,7 @@ export default function StreamsPage() {
       rtspUrl: '',
       fps: 5,
       detectionEnabled: true,
+      type: 'COLOR',
     },
   });
 
@@ -616,6 +756,69 @@ export default function StreamsPage() {
                   <p className="text-sm text-red-500">{createForm.formState.errors.fps.message}</p>
                 )}
               </div>
+
+              {/* Stream Type Selection */}
+              <div className="space-y-3">
+                <Label>Stream Type</Label>
+                <Controller
+                  control={createForm.control}
+                  name="type"
+                  render={({ field }) => (
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['COLOR', 'THERMAL', 'SPLIT'] as StreamType[]).map((type) => {
+                        const typeInfo = getStreamTypeInfo(type);
+                        return (
+                          <Button
+                            key={type}
+                            type="button"
+                            variant={field.value === type ? "default" : "outline"}
+                            className={`justify-start gap-2 ${field.value === type ? typeInfo.bg : ''}`}
+                            onClick={() => field.onChange(type)}
+                          >
+                            {typeInfo.icon}
+                            {typeInfo.label}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  )}
+                />
+                {createForm.formState.errors.type && (
+                  <p className="text-sm text-red-500">{createForm.formState.errors.type.message}</p>
+                )}
+              </div>
+
+              {/* Split Layout Selection (conditional) */}
+              {createForm.watch('type') === 'SPLIT' && (
+                <div className="space-y-3">
+                  <Label>Split Layout</Label>
+                  <Controller
+                    control={createForm.control}
+                    name="splitLayout"
+                    render={({ field }) => (
+                      <div className="grid grid-cols-2 gap-2">
+                        {(['LEFT_RIGHT', 'TOP_BOTTOM'] as SplitLayout[]).map((layout) => {
+                          const layoutInfo = getSplitLayoutInfo(layout);
+                          return (
+                            <Button
+                              key={layout}
+                              type="button"
+                              variant={field.value === layout ? "default" : "outline"}
+                              className="justify-start gap-2"
+                              onClick={() => field.onChange(layout)}
+                            >
+                              {layoutInfo?.icon} {layoutInfo?.label}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  />
+                  {createForm.formState.errors.splitLayout && (
+                    <p className="text-sm text-red-500">{createForm.formState.errors.splitLayout.message}</p>
+                  )}
+                </div>
+              )}
 
               <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800">
                 <Label htmlFor="create-detection">Enable AI Detection</Label>
