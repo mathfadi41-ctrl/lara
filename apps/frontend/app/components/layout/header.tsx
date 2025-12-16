@@ -22,7 +22,10 @@ export function Header({ onMenuClick }: HeaderProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
+    // Use setTimeout to avoid calling setState synchronously in effect
+    setTimeout(() => {
+      setMounted(true);
+    }, 0);
   }, []);
 
   if (!mounted) return null;

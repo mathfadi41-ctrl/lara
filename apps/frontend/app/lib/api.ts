@@ -68,7 +68,7 @@ class ApiClient {
   private isRefreshing = false;
   private failedQueue: Array<{
     resolve: (token: string) => void;
-    reject: (error: any) => void;
+    reject: (error: unknown) => void;
   }> = [];
 
   constructor() {
@@ -80,7 +80,7 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response) => response,
       async (error: AxiosError) => {
-        const originalRequest = error.config as AxiosError['config'] & { _retry?: boolean };
+        const originalRequest = error.config as (AxiosError['config'] & { _retry?: boolean }) | undefined;
 
         if (error.response?.status === 401 && !originalRequest._retry) {
           if (this.isRefreshing) {
@@ -138,7 +138,7 @@ class ApiClient {
     );
   }
 
-  private processQueue(error: any, token: string | null = null) {
+  private processQueue(error: unknown, token: string | null = null) {
     this.failedQueue.forEach((prom) => {
       if (error) {
         prom.reject(error);
@@ -225,7 +225,7 @@ class ApiClient {
       if (refreshToken) {
          await this.client.post('/auth/logout', { refreshToken });
       }
-    } catch (e) {
+    } catch {
       // Ignore errors during logout
     }
 
@@ -237,6 +237,7 @@ class ApiClient {
     useAuthStore.getState().logout();
     useDetectionsStore.getState().clearDetections();
     useStreamsStore.getState().setSelectedStreamId(null);
+    useStreamsStore.getState().clearSelectedStreams();
 
     if (typeof window !== 'undefined') {
       window.location.href = '/login';

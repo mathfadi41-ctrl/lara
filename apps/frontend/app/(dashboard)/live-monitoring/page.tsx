@@ -11,168 +11,350 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
+// Removed unused Select imports
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { PageHeader } from '@/components/layout/page-header';
 import { LoadingSkeletonCard } from '@/components/layout/loading-skeleton';
-import { useDetectionsStore, useStreamsStore } from '@/lib/store';
-import { Maximize2 } from 'lucide-react';
+import { StreamViewport } from '@/components/stream-viewport';
+import { useStreamsStore } from '@/lib/store';
+import {
+  subscribeToStream,
+  unsubscribeFromStream,
+  enableStreamDetection,
+  getCurrentSubscriptions,
+} from '@/lib/socket';
+import { Monitor, Grid, Grid3X3, Grid2X2 } from 'lucide-react';
+
+type ViewMode = '1' | '2' | '4';
+
+interface ViewportSettings {
+  [streamId: string]: {
+    showOverlay: boolean;
+    audioEnabled: boolean;
+  };
+}
 
 export default function LiveMonitoringPage() {
-  const { selectedStreamId, setSelectedStreamId } = useStreamsStore();
-  const { detections } = useDetectionsStore();
-  const [detectionEnabled, setDetectionEnabled] = useState(false);
-  const [fullscreen, setFullscreen] = useState(false);
-
+  const {
+    selectedStreamIds,
+    primaryStreamId,
+    setSelectedStreams,
+    setPrimaryStream,
+    addSelectedStream,
+    removeSelectedStream,
+  } = useStreamsStore();
+  
+  const [viewMode, setViewMode] = useState<ViewMode>('1');
+  const [viewportSettings, setViewportSettings] = useState<ViewportSettings>({});
+  
   const { data: streams, isLoading } = useQuery<Stream[]>({
     queryKey: ['streams'],
     queryFn: () => apiClient.listStreams().then((res) => res.data),
   });
 
-  const selectedStream = streams?.find((s) => s.id === selectedStreamId);
-
+  // Initialize viewport settings when streams change
   useEffect(() => {
-    if (streams && streams.length > 0 && !selectedStreamId) {
-      setSelectedStreamId(streams[0].id);
+    if (streams) {
+      const newSettings: ViewportSettings = {};
+      streams.forEach(stream => {
+        if (!viewportSettings[stream.id]) {
+          newSettings[stream.id] = {
+            showOverlay: true,
+            audioEnabled: false,
+          };
+        }
+      });
+      if (Object.keys(newSettings).length > 0) {
+        // Use setTimeout to avoid calling setState synchronously in effect
+        setTimeout(() => {
+          setViewportSettings(prev => ({ ...prev, ...newSettings }));
+        }, 0);
+      }
     }
-  }, [streams, selectedStreamId, setSelectedStreamId]);
+  }, [streams, viewportSettings]);
+
+  // Auto-select streams when view mode changes
+  useEffect(() => {
+    if (streams && streams.length > 0) {
+      const streamCount = parseInt(viewMode);
+      const selectedIds = streams.slice(0, streamCount).map(s => s.id);
+      
+      // Unsubscribe from streams that are no longer selected
+      selectedStreamIds.forEach(id => {
+        if (!selectedIds.includes(id)) {
+          unsubscribeFromStream(id);
+        }
+      });
+      
+      // Update selected streams
+      setSelectedStreams(selectedIds);
+      
+      // Subscribe to new selections
+      selectedIds.forEach(id => {
+        subscribeToStream(id);
+        const stream = streams.find(s => s.id === id);
+        if (stream?.detectionEnabled) {
+          enableStreamDetection(id);
+        }
+      });
+    }
+  }, [viewMode, streams, setSelectedStreams, selectedStreamIds]);
+
+  const selectedStreams = streams?.filter(s => selectedStreamIds.includes(s.id)) || [];
+
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+  };
+
+  const handleStreamSelect = (streamId: string) => {
+    const stream = streams?.find(s => s.id === streamId);
+    if (!stream) return;
+
+    if (selectedStreamIds.includes(streamId)) {
+      removeSelectedStream(streamId);
+      unsubscribeFromStream(streamId);
+    } else {
+      const maxStreams = parseInt(viewMode);
+      if (selectedStreamIds.length >= maxStreams) {
+        // Replace the oldest selection
+        const oldestId = selectedStreamIds[0];
+        removeSelectedStream(oldestId);
+        unsubscribeFromStream(oldestId);
+      }
+      addSelectedStream(streamId);
+      subscribeToStream(streamId);
+      
+      const streamData = streams?.find(s => s.id === streamId);
+      if (streamData?.detectionEnabled) {
+        enableStreamDetection(streamId);
+      }
+    }
+  };
+
+  const handleToggleOverlay = (streamId: string, enabled: boolean) => {
+    setViewportSettings(prev => ({
+      ...prev,
+      [streamId]: {
+        ...prev[streamId],
+        showOverlay: enabled,
+      },
+    }));
+  };
+
+  const handleToggleAudio = (streamId: string, enabled: boolean) => {
+    setViewportSettings(prev => ({
+      ...prev,
+      [streamId]: {
+        ...prev[streamId],
+        audioEnabled: enabled,
+      },
+    }));
+  };
+
+  const handleSetPrimary = (streamId: string) => {
+    setPrimaryStream(streamId);
+  };
+
+  const getGridClassName = () => {
+    switch (viewMode) {
+      case '1':
+        return 'grid-cols-1';
+      case '2':
+        return 'grid-cols-1 md:grid-cols-2';
+      case '4':
+        return 'grid-cols-1 md:grid-cols-2 lg:grid-cols-2';
+      default:
+        return 'grid-cols-1';
+    }
+  };
 
   /**
-   * Live Monitoring Page
-   * Real-time stream viewing with AI detection overlay controls
+   * Split-screen Monitoring Page
+   * Multi-stream viewing with real-time detection overlays
    */
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
-        title="Live Monitoring"
-        description="Watch streams in real-time with AI detection overlays"
+        title="Split-Screen Monitoring"
+        description="Monitor up to 4 streams simultaneously with real-time AI detection"
       />
 
       {isLoading ? (
         <LoadingSkeletonCard count={2} />
       ) : (
         <>
-          {/* Stream Selection */}
+          {/* Control Panel */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Stream Control</CardTitle>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Grid className="h-5 w-5" />
+                Stream Controls
+              </CardTitle>
+              <CardDescription>
+                Select streams to monitor and configure view settings
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="stream-select">Select Stream</Label>
-                  <Select value={selectedStreamId || ''} onValueChange={setSelectedStreamId}>
-                    <SelectTrigger id="stream-select">
-                      <SelectValue placeholder="Select a stream" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {streams?.map((stream: any) => (
-                        <SelectItem key={stream.id} value={stream.id}>
-                          {stream.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Stream Status</Label>
-                  <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-800">
-                    <div
-                      className={`h-3 w-3 rounded-full ${
-                        selectedStream?.status === 'RUNNING'
-                          ? 'bg-green-500'
-                          : selectedStream?.status === 'ERROR'
-                            ? 'bg-red-500'
-                            : 'bg-slate-300 dark:bg-slate-700'
-                      }`}
-                    />
-                    <span className="text-sm">
-                      {selectedStream?.status || 'STOPPED'}
-                    </span>
-                  </div>
+              {/* View Mode Selection */}
+              <div className="space-y-2">
+                <Label>View Mode</Label>
+                <div className="flex gap-2">
+                  <Button
+                    variant={viewMode === '1' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => handleViewModeChange('1')}
+                    className="flex items-center gap-2"
+                  >
+                    <Monitor className="h-4 w-4" />
+                    Single
+                  </Button>
+                  <Button
+                    variant={viewMode === '2' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => handleViewModeChange('2')}
+                    className="flex items-center gap-2"
+                  >
+                    <Grid2X2 className="h-4 w-4" />
+                    Dual
+                  </Button>
+                  <Button
+                    variant={viewMode === '4' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => handleViewModeChange('4')}
+                    className="flex items-center gap-2"
+                  >
+                    <Grid3X3 className="h-4 w-4" />
+                    Quad
+                  </Button>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800">
-                <Label htmlFor="ai-toggle">Enable AI Detection</Label>
-                <Switch
-                  id="ai-toggle"
-                  checked={detectionEnabled}
-                  onCheckedChange={setDetectionEnabled}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Video Player */}
-          <Card className={fullscreen ? 'fixed inset-0 z-50 rounded-none' : ''}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <div>
-                <CardTitle>{selectedStream?.name || 'No stream selected'}</CardTitle>
-                <CardDescription>
-                  {selectedStream?.rtspUrl}
-                </CardDescription>
-              </div>
-              <button
-                onClick={() => setFullscreen(!fullscreen)}
-                className="rounded-md p-2 hover:bg-slate-100 dark:hover:bg-slate-800"
-              >
-                <Maximize2 className="h-4 w-4" />
-              </button>
-            </CardHeader>
-            <CardContent className="aspect-video bg-black">
-              {selectedStream && selectedStream.status === 'RUNNING' ? (
-                <div className="h-full w-full flex items-center justify-center text-slate-400">
-                  <div className="text-center">
-                    <p className="text-sm">HLS/WebRTC stream would render here</p>
-                    <p className="text-xs mt-2">Stream: {selectedStream.rtspUrl}</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="h-full flex items-center justify-center text-slate-400">
-                  <p className="text-sm">Stream not running</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Detection Events */}
-          {detectionEnabled && detections.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Recent Detections</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {detections.slice(0, 10).map((detection: any, index: number) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-800"
+              {/* Stream Selection */}
+              <div className="space-y-2">
+                <Label>Select Streams (max {viewMode})</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {streams?.map((stream) => (
+                    <Button
+                      key={stream.id}
+                      variant={selectedStreamIds.includes(stream.id) ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => handleStreamSelect(stream.id)}
+                      disabled={!selectedStreamIds.includes(stream.id) && selectedStreamIds.length >= parseInt(viewMode)}
+                      className="justify-start h-auto p-3"
                     >
-                      <div>
-                        <p className="text-sm font-medium capitalize">{detection.type}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {(detection.confidence * 100).toFixed(1)}% confidence
-                        </p>
+                      <div className="flex flex-col items-start text-left">
+                        <div className="flex items-center gap-2 w-full">
+                          <div
+                            className={`h-2 w-2 rounded-full ${
+                              stream.status === 'RUNNING'
+                                ? 'bg-green-500'
+                                : stream.status === 'ERROR'
+                                ? 'bg-red-500'
+                                : 'bg-slate-400'
+                            }`}
+                          />
+                          <span className="font-medium truncate">{stream.name}</span>
+                        </div>
+                        <span className="text-xs opacity-75 mt-1">
+                          {stream.status} | {stream.fps}fps
+                        </span>
                       </div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400">
-                        {new Date(detection.createdAt).toLocaleTimeString()}
-                      </div>
-                    </div>
+                    </Button>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
+                
+                {selectedStreamIds.length === 0 && (
+                  <p className="text-sm text-slate-500 text-center py-4">
+                    Select {viewMode} stream{viewMode === '1' ? '' : 's'} to begin monitoring
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Stream Grid */}
+          {selectedStreams.length > 0 && (
+            <div className={`grid gap-4 ${getGridClassName()}`}>
+              {selectedStreams.map((stream) => {
+                const settings = viewportSettings[stream.id] || {
+                  showOverlay: true,
+                  audioEnabled: false,
+                };
+                
+                return (
+                  <div key={stream.id} className="relative">
+                    <StreamViewport
+                      stream={stream}
+                      isPrimary={primaryStreamId === stream.id}
+                      showOverlay={settings.showOverlay}
+                      audioEnabled={settings.audioEnabled}
+                      onToggleOverlay={(enabled) => handleToggleOverlay(stream.id, enabled)}
+                      onToggleAudio={(enabled) => handleToggleAudio(stream.id, enabled)}
+                      onFullscreen={() => console.log('Fullscreen toggled for stream:', stream.id)}
+                    />
+                    
+                    {/* Primary stream indicator */}
+                    <div className="absolute top-2 left-1/2 transform -translate-x-1/2 z-10">
+                      {primaryStreamId === stream.id ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="bg-blue-500/80 hover:bg-blue-500 text-white border-0"
+                          onClick={() => handleSetPrimary(stream.id)}
+                        >
+                          Primary Stream
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="bg-black/50 hover:bg-black/70 text-white border-white/20"
+                          onClick={() => handleSetPrimary(stream.id)}
+                        >
+                          Set as Primary
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
+
+          {/* Current Subscriptions Info */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Connection Status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm">Active Subscriptions:</span>
+                  <span className="text-sm font-medium">
+                    {getCurrentSubscriptions().length} stream{getCurrentSubscriptions().length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {getCurrentSubscriptions().map((streamId) => {
+                    const stream = streams?.find(s => s.id === streamId);
+                    return (
+                      <span
+                        key={streamId}
+                        className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                      >
+                        {stream?.name || streamId}
+                      </span>
+                    );
+                  })}
+                </div>
+                {getCurrentSubscriptions().length === 0 && (
+                  <p className="text-sm text-slate-500">No active stream subscriptions</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </>
       )}
     </div>

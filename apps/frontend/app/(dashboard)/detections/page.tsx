@@ -112,7 +112,7 @@ export default function DetectionsPage() {
         <LoadingSkeletonCard count={3} variant="grid" />
       ) : detections && detections.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {detections.map((detection: any) => (
+          {detections.map((detection: Record<string, unknown>) => (
             <Card key={detection.id}>
               <CardHeader>
                 <div className="flex items-start justify-between">
